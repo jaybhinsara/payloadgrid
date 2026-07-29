@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type Provider = { id: string; name: string; color: string; category: string };
 type Endpoint = { id: string; name: string; provider: string; destination_url: string; is_active: boolean; created_at: string };
@@ -54,21 +54,35 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [providerFilter, setProviderFilter] = useState("all");
   const [creating, setCreating] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  async function loadDashboard() {
-    const response = await fetch("/api/dashboard", { cache: "no-store" });
-    const payload = await response.json();
-    if (!payload.ok) {
-      setError(payload.error || "Could not load dashboard");
-      return;
+  const loadDashboard = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setRefreshing(true);
+    try {
+      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      const payload = await response.json();
+      if (!payload.ok) {
+        setError(payload.error || "Could not load dashboard");
+        return;
+      }
+      setData(payload);
+      setError(null);
+      setLastUpdated(new Date());
+    } finally {
+      if (showRefreshing) setRefreshing(false);
     }
-    setData(payload);
-    setError(null);
-  }
+  }, []);
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadDashboard();
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [loadDashboard]);
 
   const events = useMemo(() => {
     if (!data) return [];
@@ -124,6 +138,12 @@ export default function Home() {
           <p className="eyebrow">HookIn production dashboard</p>
           <h1>Real webhook events, stored in Neon and forwarded from Vercel.</h1>
           <p>Create an endpoint, paste the HookIn URL into Razorpay, Stripe, Cashfree, Shopify, or any provider, and inspect every delivery attempt.</p>
+        </div>
+        <div className="refresh-card">
+          <span>Auto refresh</span>
+          <strong>{refreshing ? "Refreshing" : "Every 5s"}</strong>
+          <button className="secondary" onClick={() => loadDashboard(true)}>Refresh now</button>
+          <small>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Waiting for data"}</small>
         </div>
       </header>
 
