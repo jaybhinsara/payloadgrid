@@ -140,10 +140,8 @@ export default function Home() {
           <p>Create an endpoint, paste the HookIn URL into Razorpay, Stripe, Cashfree, Shopify, or any provider, and inspect every delivery attempt.</p>
         </div>
         <div className="refresh-card">
-          <span>Auto refresh</span>
-          <strong>{refreshing ? "Refreshing" : "Every 5s"}</strong>
-          <button className="secondary" onClick={() => loadDashboard(true)}>Refresh now</button>
           <small>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Waiting for data"}</small>
+          <button className="secondary" onClick={() => loadDashboard(true)}>Refresh now</button>
         </div>
       </header>
 
