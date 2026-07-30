@@ -206,9 +206,9 @@ export default function Home() {
             const endpoint = data?.endpoints.find((item) => item.id === event.endpoint_id);
             return (
               <article className="event-row" key={event.id}>
-                <div><strong>{event.event_type}</strong><span>{event.provider} · {event.provider_event_id || event.id}</span></div>
-                <div><strong>{endpoint?.name || "Endpoint"}</strong><span>{timeAgo(event.received_at)}</span></div>
-                <div><strong className={`status ${statusClass(event.status)}`}>{event.response_status || "-"} {event.status}</strong><span>{event.error || `${event.latency_ms || 0}ms`}</span></div>
+                <div><strong style={{ padding: "2px" }}>{event.event_type}</strong><span>{event.provider} · {event.provider_event_id || event.id}</span></div>
+                <div><strong style={{ padding: "2px" }}>{endpoint?.name || "Endpoint"}</strong><span>{timeAgo(event.received_at)}</span></div>
+                <div><strong style={{ padding: "2px" }} className={`status ${statusClass(event.status)}`}>{event.response_status || "-"} {event.status}</strong><span>{event.error || `${event.latency_ms || 0}ms`}</span></div>
                 <button className="secondary" onClick={() => replay(event.id)}>Replay</button>
               </article>
             );
