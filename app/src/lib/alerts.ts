@@ -17,14 +17,14 @@ export async function notifyFailure(notice: FailureNotice) {
     if (!notification) continue;
     try {
       let response: Response;
-      const payload = { source: "HookIn", alert: String(rule.name), eventId: notice.eventId, eventType: notice.eventType, error: notice.error, failuresInWindow: Number(summary.failures), occurredAt: new Date().toISOString() };
+      const payload = { source: "PayloadGrid", alert: String(rule.name), eventId: notice.eventId, eventType: notice.eventType, error: notice.error, failuresInWindow: Number(summary.failures), occurredAt: new Date().toISOString() };
       if (rule.channel === "email") {
-        const apiKey = process.env.RESEND_API_KEY; const from = process.env.HOOKIN_ALERT_FROM;
-        if (!apiKey || !from) throw new Error("RESEND_API_KEY and HOOKIN_ALERT_FROM are required for email alerts");
-        response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" }, body: JSON.stringify({ from, to: [rule.destination], subject: `[HookIn] ${rule.name}: ${notice.eventType}`, text: `HookIn delivery alert\n\n${notice.eventType} failed delivery.\n${notice.error}\n\nEvent: ${notice.eventId}` }) });
+        const apiKey = process.env.RESEND_API_KEY; const from = process.env.PAYLOADGRID_ALERT_FROM;
+        if (!apiKey || !from) throw new Error("RESEND_API_KEY and PAYLOADGRID_ALERT_FROM are required for email alerts");
+        response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" }, body: JSON.stringify({ from, to: [rule.destination], subject: `[PayloadGrid] ${rule.name}: ${notice.eventType}`, text: `PayloadGrid delivery alert\n\n${notice.eventType} failed delivery.\n${notice.error}\n\nEvent: ${notice.eventId}` }) });
       } else {
-        const body = rule.channel === "slack" ? { text: `HookIn alert: *${rule.name}*\n${notice.eventType} failed: ${notice.error}\nEvent ${notice.eventId}` } : payload;
-        response = await fetch(String(rule.destination), { method: "POST", headers: { "content-type": "application/json", "user-agent": "HookIn-Alerts/1.0" }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
+        const body = rule.channel === "slack" ? { text: `PayloadGrid alert: *${rule.name}*\n${notice.eventType} failed: ${notice.error}\nEvent ${notice.eventId}` } : payload;
+        response = await fetch(String(rule.destination), { method: "POST", headers: { "content-type": "application/json", "user-agent": "PayloadGrid-Alerts/1.0" }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
       }
       await sql`update alert_notifications set status = ${response.ok ? "sent" : "failed"}, response_status = ${response.status}, error = ${response.ok ? null : `Alert destination HTTP ${response.status}`} where id = ${notification.id}`;
     } catch (error) {

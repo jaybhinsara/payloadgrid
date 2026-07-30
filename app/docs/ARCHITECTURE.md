@@ -1,4 +1,4 @@
-# HookIn architecture
+# PayloadGrid architecture
 
 ## Tenant ownership
 
@@ -15,11 +15,11 @@ Every console API resolves the current session and project on the server. Resour
 
 ## Outbound sequence
 
-1. A customer backend calls `POST /api/v1/messages` with a HookIn API key.
-2. HookIn hashes the supplied key and resolves its project.
+1. A customer backend calls `POST /api/v1/messages` with a PayloadGrid API key.
+2. PayloadGrid hashes the supplied key and resolves its project.
 3. An idempotency key lookup prevents duplicate messages.
 4. Active transformations are applied to the payload.
-5. HookIn selects active endpoints for the application and event subscription.
+5. PayloadGrid selects active endpoints for the application and event subscription.
 6. Each delivery receives a persistent event ID and endpoint-specific HMAC signature.
 7. The response, headers, status, body, error, and latency are stored.
 8. Failed deliveries are scheduled using increasing retry intervals.
@@ -27,7 +27,7 @@ Every console API resolves the current session and project on the server. Resour
 
 ## Inbound sequence
 
-A provider posts to `/in/:endpointId`. HookIn stores the original headers and payload, derives the provider event type and ID, forwards the event to the endpoint destination with a HookIn signature, and uses the same attempt/retry/alert pipeline as outbound messages.
+A provider posts to `/in/:endpointId`. PayloadGrid stores the original headers and payload, derives the provider event type and ID, forwards the event to the endpoint destination with a PayloadGrid signature, and uses the same attempt/retry/alert pipeline as outbound messages.
 
 ## Scaling path
 

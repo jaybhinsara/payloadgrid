@@ -72,10 +72,10 @@ export async function dispatchMessage(input: DispatchInput) {
   for (const endpoint of endpoints) {
     const [event] = await sql`
       insert into webhook_events (endpoint_id, application_id, message_id, direction, provider, provider_event_id, event_type, request_body, status, max_retries)
-      values (${endpoint.id}, ${input.applicationId}, ${message.id}, 'outbound', 'hookin', ${message.id}, ${input.eventType}, ${JSON.stringify(payload)}::jsonb, 'received', 6)
+      values (${endpoint.id}, ${input.applicationId}, ${message.id}, 'outbound', 'payloadgrid', ${message.id}, ${input.eventType}, ${JSON.stringify(payload)}::jsonb, 'received', 6)
       returning id
     `;
-    const headers = { "hookin-event-type": input.eventType };
+    const headers = { "payloadgrid-event-type": input.eventType };
     const delivery = await deliverWebhook(
       String(endpoint.destination_url), payload, "outbound", headers,
       endpoint.signing_secret ? { secret: String(endpoint.signing_secret), deliveryId: String(event.id) } : undefined

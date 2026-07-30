@@ -7,7 +7,8 @@ export async function authenticateApiKey(request: Request): Promise<ApiKeyContex
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice(7).trim();
-  if (!token.startsWith("hkin_live_")) return null;
+  // Prefix-independent validation keeps previously issued keys usable after a rebrand.
+  if (!/^[A-Za-z0-9_-]{32,96}$/.test(token)) return null;
   const sql = requireSql();
   const [key] = await sql`
     select k.id, k.project_id, p.organization_id

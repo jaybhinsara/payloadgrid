@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const sql = requireSql(); const events = await sql`select e.id, e.event_type, e.request_body, e.retry_count, e.max_retries, e.message_id, ep.project_id, ep.destination_url, ep.signing_secret from webhook_events e join endpoints ep on ep.id = e.endpoint_id where e.status = 'retrying' and e.next_retry_at is not null and e.next_retry_at <= now() and ep.is_active = true order by e.next_retry_at asc limit 25`;
     const results = [];
     for (const event of events) {
-      const attempt = Number(event.retry_count || 0) + 1; const maxRetries = Number(event.max_retries || 6); const headers = { "hookin-event-type": String(event.event_type) };
+      const attempt = Number(event.retry_count || 0) + 1; const maxRetries = Number(event.max_retries || 6); const headers = { "payloadgrid-event-type": String(event.event_type) };
       const delivery = await deliverWebhook(String(event.destination_url), event.request_body, "retry", headers, event.signing_secret ? { secret: String(event.signing_secret), deliveryId: String(event.id) } : undefined);
       const willRetry = !delivery.ok && shouldRetry(attempt, maxRetries); const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "failed";
       await sql`insert into delivery_attempts (event_id, attempt_number, destination_url, request_headers, response_status, response_headers, response_body, error, latency_ms) values (${event.id}, ${attempt}, ${event.destination_url}, ${JSON.stringify(headers)}::jsonb, ${delivery.status}, ${JSON.stringify(delivery.responseHeaders)}::jsonb, ${delivery.body}, ${delivery.error}, ${delivery.latencyMs})`;

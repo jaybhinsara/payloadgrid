@@ -1,5 +1,5 @@
 import Link from "next/link";
 
 export function Brand({ href = "/" }: { href?: string }) {
-  return <Link href={href} className="brand" aria-label="HookIn home"><span className="brand-mark"><i /><i /><i /></span><span>HookIn</span></Link>;
+  return <Link href={href} className="brand" aria-label="PayloadGrid home"><img className="brand-logo" src="/icon.svg" alt="" width="30" height="30" /><span>PayloadGrid</span></Link>;
 }

@@ -1,3 +1,5 @@
+import { SITE_URL } from "@/lib/site";
+
 export type Provider = "razorpay" | "stripe" | "cashfree" | "shopify" | "custom";
 export type WebhookStatus = "received" | "delivered" | "failed" | "retrying";
 
@@ -10,7 +12,7 @@ export const providers = [
 ] as const;
 
 export function appUrl() {
-  return process.env.HOOKIN_APP_URL || "http://localhost:3200";
+  return SITE_URL;
 }
 
 export function eventTypeFromPayload(payload: unknown) {

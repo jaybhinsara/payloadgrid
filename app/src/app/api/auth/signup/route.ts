@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const [organization] = await sql`insert into organizations (name, slug) values (${body.organizationName}, ${organizationSlug}) returning id`;
     await sql`insert into organization_members (organization_id, user_id, role) values (${organization.id}, ${user.id}, 'owner')`;
     const [project] = await sql`insert into projects (organization_id, name, slug, environment) values (${organization.id}, 'Production', ${projectSlug}, 'production') returning id`;
-    await sql`insert into applications (project_id, name, uid, description) values (${project.id}, 'My application', ${`app_${randomToken(12)}`}, 'Your first HookIn application')`;
+    await sql`insert into applications (project_id, name, uid, description) values (${project.id}, 'My application', ${`app_${randomToken(12)}`}, 'Your first PayloadGrid application')`;
     await sql`insert into event_types (project_id, name, description) values (${project.id}, 'order.created', 'Example event type; rename or add your own') on conflict do nothing`;
     await createSession(String(user.id)); return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, email: user.email } }, { status: 201 });
   } catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Sign up failed" }, { status: 400 }); }

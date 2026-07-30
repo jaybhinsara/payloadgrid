@@ -12,10 +12,10 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
   const { endpointId } = await contextValue.params;
   try {
     const sql = requireSql(); const [endpoint] = await sql`select id, project_id, application_id, provider, destination_url, signing_secret, is_active from endpoints where id = ${endpointId} limit 1`;
-    if (!endpoint || !endpoint.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive HookIn endpoint" }, { status: 404 });
+    if (!endpoint || !endpoint.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive PayloadGrid endpoint" }, { status: 404 });
     const payload = await readPayload(request); const headers = Object.fromEntries(request.headers.entries()); const eventType = eventTypeFromPayload(payload); const providerEventId = providerEventIdFromPayload(payload); const amount = amountFromPayload(payload); const maxRetries = 6;
     const [event] = await sql`insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type, request_headers, request_body, status, max_retries) values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${endpoint.provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType}, ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, 'received', ${maxRetries}) returning id`;
-    const forwardHeaders = { "x-hookin-original-user-agent": headers["user-agent"] || "", "hookin-event-type": eventType };
+    const forwardHeaders = { "x-payloadgrid-original-user-agent": headers["user-agent"] || "", "payloadgrid-event-type": eventType };
     const delivery = await deliverWebhook(String(endpoint.destination_url), payload, "forward", forwardHeaders, endpoint.signing_secret ? { secret: String(endpoint.signing_secret), deliveryId: String(event.id) } : undefined);
     const willRetry = !delivery.ok && shouldRetry(1, maxRetries); const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "failed";
     await sql`insert into delivery_attempts (event_id, attempt_number, destination_url, request_headers, response_status, response_headers, response_body, error, latency_ms) values (${event.id}, 1, ${endpoint.destination_url}, ${JSON.stringify(forwardHeaders)}::jsonb, ${delivery.status}, ${JSON.stringify(delivery.responseHeaders)}::jsonb, ${delivery.body}, ${delivery.error}, ${delivery.latencyMs})`;

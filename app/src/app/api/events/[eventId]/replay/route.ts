@@ -19,7 +19,7 @@ export async function POST(_request: Request, contextValue: { params: Promise<{ 
     if (!event) return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
     const [attemptCount] = await sql`select count(*)::int as count from delivery_attempts where event_id = ${event.id}`;
     const attemptNumber = Number(attemptCount.count || 0) + 1; const maxRetries = Math.max(Number(event.max_retries || 6), attemptNumber + 1);
-    const headers = { "hookin-event-type": String(event.event_type) };
+    const headers = { "payloadgrid-event-type": String(event.event_type) };
     const delivery = await deliverWebhook(String(event.destination_url), event.request_body, "replay", headers, event.signing_secret ? { secret: String(event.signing_secret), deliveryId: String(event.id) } : undefined);
     const willRetry = !delivery.ok && shouldRetry(attemptNumber, maxRetries); const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "failed";
     await sql`insert into delivery_attempts (event_id, attempt_number, destination_url, request_headers, response_status, response_headers, response_body, error, latency_ms) values (${event.id}, ${attemptNumber}, ${event.destination_url}, ${JSON.stringify(headers)}::jsonb, ${delivery.status}, ${JSON.stringify(delivery.responseHeaders)}::jsonb, ${delivery.body}, ${delivery.error}, ${delivery.latencyMs})`;

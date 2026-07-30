@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { requireSql } from "@/lib/db";
 import { randomToken, sha256 } from "@/lib/security";
 
-export const SESSION_COOKIE = "hookin_session";
-export const ACTIVE_ORG_COOKIE = "hookin_organization";
+export const SESSION_COOKIE = "payloadgrid_session";
+export const ACTIVE_ORG_COOKIE = "payloadgrid_organization";
 const SESSION_DAYS = 30;
 export type SessionContext = {
   user: { id: string; name: string; email: string };

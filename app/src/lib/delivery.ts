@@ -23,9 +23,9 @@ export async function deliverWebhook(
   const body = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signedHeaders: Record<string, string> = signing ? {
-    "hookin-id": signing.deliveryId,
-    "hookin-timestamp": timestamp,
-    "hookin-signature": `v1,${createWebhookSignature(signing.secret, signing.deliveryId, timestamp, body)}`
+    "payloadgrid-id": signing.deliveryId,
+    "payloadgrid-timestamp": timestamp,
+    "payloadgrid-signature": `v1,${createWebhookSignature(signing.secret, signing.deliveryId, timestamp, body)}`
   } : {};
 
   try {
@@ -33,8 +33,8 @@ export async function deliverWebhook(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "user-agent": "HookIn-Webhooks/1.0",
-        "x-hookin-delivery-mode": mode,
+        "user-agent": "PayloadGrid-Webhooks/1.0",
+        "x-payloadgrid-delivery-mode": mode,
         ...signedHeaders,
         ...extraHeaders
       },

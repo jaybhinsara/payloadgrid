@@ -35,6 +35,6 @@ export function createWebhookSignature(secret: string, deliveryId: string, times
 }
 
 export function createApiKey() {
-  const token = `hkin_live_${randomToken(30)}`;
+  const token = `pg_live_${randomToken(30)}`;
   return { token, prefix: token.slice(0, 16), hash: sha256(token) };
 }
