@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eventTypeFromPayload, providerEventIdFromPayload } from "@/lib/constants";
+import { amountFromPayload, eventTypeFromPayload, providerEventIdFromPayload } from "@/lib/constants";
 import { requireSql } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -70,6 +70,7 @@ export async function POST(request: Request, context: { params: Promise<{ endpoi
     const headers = headersToObject(request.headers);
     const eventType = eventTypeFromPayload(payload);
     const providerEventId = providerEventIdFromPayload(payload);
+    const amount = amountFromPayload(payload);
 
     const [event] = await sql`
       insert into webhook_events (endpoint_id, provider, provider_event_id, event_type, request_headers, request_body, status)
@@ -87,7 +88,7 @@ export async function POST(request: Request, context: { params: Promise<{ endpoi
 
     await sql`
       update webhook_events
-      set status = ${nextStatus}, updated_at = now()
+      set status = ${nextStatus}, revenue_at_risk = ${delivery.ok ? 0 : amount}, updated_at = now()
       where id = ${event.id}
     `;
 
