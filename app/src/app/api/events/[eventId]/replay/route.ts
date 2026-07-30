@@ -1,45 +1,16 @@
 import { NextResponse } from "next/server";
+import { deliverWebhook, nextRetryDelayMinutes, shouldRetry } from "@/lib/delivery";
 import { requireSql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-async function forward(destinationUrl: string, payload: unknown) {
-  const started = Date.now();
-  try {
-    const response = await fetch(destinationUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-hookin-replay": "true"
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000)
-    });
-    return {
-      ok: response.ok,
-      status: response.status,
-      body: (await response.text().catch(() => "")).slice(0, 4000),
-      error: null,
-      latencyMs: Date.now() - started
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      status: null,
-      body: "",
-      error: error instanceof Error ? error.message : "Replay failed",
-      latencyMs: Date.now() - started
-    };
-  }
-}
 
 export async function POST(_request: Request, context: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await context.params;
   try {
     const sql = requireSql();
     const [event] = await sql`
-      select e.id, e.request_body, ep.destination_url
+      select e.id, e.request_body, e.max_retries, e.revenue_at_risk, ep.destination_url
       from webhook_events e
       join endpoints ep on ep.id = e.endpoint_id
       where e.id = ${eventId}
@@ -52,8 +23,11 @@ export async function POST(_request: Request, context: { params: Promise<{ event
 
     const [attemptCount] = await sql`select count(*)::int as count from delivery_attempts where event_id = ${event.id}`;
     const attemptNumber = Number(attemptCount.count || 0) + 1;
-    const delivery = await forward(event.destination_url, event.request_body);
-    const nextStatus = delivery.ok ? "delivered" : "failed";
+    const delivery = await deliverWebhook(event.destination_url, event.request_body, "replay");
+    const maxRetries = Number(event.max_retries || 4);
+    const willRetry = !delivery.ok && shouldRetry(attemptNumber, maxRetries);
+    const nextStatus = delivery.ok ? "delivered" : willRetry ? "retrying" : "failed";
+    const delayMinutes = nextRetryDelayMinutes(attemptNumber);
 
     await sql`
       insert into delivery_attempts (event_id, attempt_number, destination_url, response_status, response_body, error, latency_ms)
@@ -62,7 +36,13 @@ export async function POST(_request: Request, context: { params: Promise<{ event
 
     await sql`
       update webhook_events
-      set status = ${nextStatus}, revenue_at_risk = case when ${delivery.ok} then 0 else revenue_at_risk end, updated_at = now()
+      set
+        status = ${nextStatus},
+        revenue_at_risk = case when ${delivery.ok} then 0 else revenue_at_risk end,
+        retry_count = case when ${delivery.ok} then retry_count else ${attemptNumber} end,
+        next_retry_at = case when ${willRetry} then now() + (${delayMinutes} * interval '1 minute') else null end,
+        last_error = ${delivery.error || (delivery.ok ? null : `Destination HTTP ${delivery.status}`)},
+        updated_at = now()
       where id = ${event.id}
     `;
 

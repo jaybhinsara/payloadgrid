@@ -48,3 +48,9 @@ create index if not exists endpoints_project_id_idx on endpoints(project_id);
 create index if not exists webhook_events_endpoint_id_received_at_idx on webhook_events(endpoint_id, received_at desc);
 create index if not exists webhook_events_status_received_at_idx on webhook_events(status, received_at desc);
 create index if not exists delivery_attempts_event_id_idx on delivery_attempts(event_id);
+alter table webhook_events add column if not exists retry_count integer not null default 0;
+alter table webhook_events add column if not exists max_retries integer not null default 4;
+alter table webhook_events add column if not exists next_retry_at timestamptz;
+alter table webhook_events add column if not exists last_error text;
+
+create index if not exists webhook_events_next_retry_at_idx on webhook_events(next_retry_at) where status = 'retrying';

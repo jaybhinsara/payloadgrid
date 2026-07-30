@@ -25,7 +25,8 @@ Set these in Vercel Project Settings -> Environment Variables:
 - `HOOKIN_DEFAULT_PROJECT_NAME`: optional workspace display name
 - `HOOKIN_ADMIN_USER`: dashboard username, defaults to `admin`
 - `HOOKIN_ADMIN_PASSWORD`: dashboard password. If omitted, the dashboard is not password protected.
+- `CRON_SECRET`: bearer token used by Vercel Cron for automatic failed-webhook retries.
 
 ## Important Vercel note
 
-Dashboard and admin APIs are protected with HTTP Basic Auth when `HOOKIN_ADMIN_PASSWORD` is set. Public webhook ingest routes under `/in/:endpointId` remain open for providers. Webhook ingest and immediate forwarding can run in Vercel route handlers. Scheduled retry processing should later use Vercel Cron or a queue provider such as Upstash/QStash because serverless functions should not run forever.
+Dashboard and admin APIs are protected with HTTP Basic Auth when `HOOKIN_ADMIN_PASSWORD` is set. Public webhook ingest routes under `/in/:endpointId` remain open for providers. Webhook ingest and immediate forwarding can run in Vercel route handlers. Failed webhook retry processing runs through Vercel Cron every 5 minutes at `/api/cron/retry-failed`. The retry endpoint requires `Authorization: Bearer $CRON_SECRET`.

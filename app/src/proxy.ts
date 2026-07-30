@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PREFIXES = ["/in/", "/_next/", "/favicon.ico"];
+const PUBLIC_PREFIXES = ["/in/", "/api/cron/", "/_next/", "/favicon.ico"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));

@@ -17,6 +17,10 @@ type EventRow = {
   response_body: string | null;
   latency_ms: number | null;
   error: string | null;
+  retry_count: number;
+  max_retries: number;
+  next_retry_at: string | null;
+  last_error: string | null;
   attempt_count: number | null;
   request_headers: Record<string, unknown>;
   request_body: unknown;
@@ -52,7 +56,10 @@ function formatStatus(status: string) {
 
 function responseSummary(event: EventRow) {
   const response = event.response_status ? `Destination HTTP ${event.response_status}` : "No destination response";
-  const detail = event.error || `${event.latency_ms || 0}ms`;
+  const detail = event.error || event.last_error || `${event.latency_ms || 0}ms`;
+  if (event.status === "retrying" && event.next_retry_at) {
+    return `${response} · next retry ${new Date(event.next_retry_at).toLocaleTimeString()}`;
+  }
   return `${response} · ${detail}`;
 }
 
@@ -255,8 +262,9 @@ export default function Home() {
             <div className="detail-grid">
               <div><span>Status</span><strong>{formatStatus(selectedEvent.status)}</strong></div>
               <div><span>Provider</span><strong>{selectedEvent.provider}</strong></div>
-              <div><span>Attempts</span><strong>{selectedEvent.attempt_count || 0}</strong></div>
+              <div><span>Attempts</span><strong>{selectedEvent.attempt_count || 0}/{selectedEvent.max_retries}</strong></div>
               <div><span>Risk</span><strong>{formatMoney(selectedEvent.revenue_at_risk)}</strong></div>
+              <div><span>Next retry</span><strong>{selectedEvent.next_retry_at ? new Date(selectedEvent.next_retry_at).toLocaleString() : "-"}</strong></div>
             </div>
             <section className="detail-block">
               <div className="detail-title"><strong>Payload</strong><button className="secondary compact" onClick={() => copyText("payload", JSON.stringify(selectedEvent.request_body, null, 2))}>{copiedValue === "payload" ? "Copied" : "Copy"}</button></div>
