@@ -50,17 +50,22 @@ export async function GET() {
         e.updated_at,
         e.request_headers,
         e.request_body,
-        a.attempt_count,
+        coalesce(a.attempt_count, 0) as attempt_count,
         a.response_body,
         a.response_status,
         a.latency_ms,
         a.error
       from webhook_events e
       left join lateral (
-        select response_status, latency_ms, error
-        from delivery_attempts
-        where event_id = e.id
-        order by created_at desc
+        select
+          latest.response_status,
+          latest.response_body,
+          latest.latency_ms,
+          latest.error,
+          (select count(*)::int from delivery_attempts counted where counted.event_id = e.id) as attempt_count
+        from delivery_attempts latest
+        where latest.event_id = e.id
+        order by latest.created_at desc
         limit 1
       ) a on true
       where e.endpoint_id in (select id from endpoints where project_id = ${project.id})
