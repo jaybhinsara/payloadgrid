@@ -42,6 +42,15 @@ function statusClass(status: string) {
   return status.toLowerCase();
 }
 
+function formatStatus(status: string) {
+  return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+}
+
+function responseSummary(event: EventRow) {
+  const response = event.response_status ? `Destination HTTP ${event.response_status}` : "No destination response";
+  const detail = event.error || `${event.latency_ms || 0}ms`;
+  return `${response} · ${detail}`;
+}
 function timeAgo(value: string) {
   const diff = Date.now() - new Date(value).getTime();
   const minutes = Math.max(1, Math.round(diff / 60000));
@@ -208,7 +217,7 @@ export default function Home() {
               <article className="event-row" key={event.id}>
                 <div><strong style={{ padding: "2px" }}>{event.event_type}</strong><span>{event.provider} · {event.provider_event_id || event.id}</span></div>
                 <div><strong style={{ padding: "2px" }}>{endpoint?.name || "Endpoint"}</strong><span>{timeAgo(event.received_at)}</span></div>
-                <div><strong style={{ padding: "2px" }} className={`status ${statusClass(event.status)}`}>{event.response_status || "-"} {event.status}</strong><span>{event.error || `${event.latency_ms || 0}ms`}</span></div>
+                <div><strong style={{ padding: "2px" }} className={`status ${statusClass(event.status)}`}>{formatStatus(event.status)}</strong><span>{responseSummary(event)}</span></div>
                 <button className="secondary" onClick={() => replay(event.id)}>Replay</button>
               </article>
             );
