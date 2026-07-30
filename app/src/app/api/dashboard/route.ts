@@ -48,6 +48,10 @@ export async function GET() {
         e.revenue_at_risk,
         e.received_at,
         e.updated_at,
+        e.request_headers,
+        e.request_body,
+        a.attempt_count,
+        a.response_body,
         a.response_status,
         a.latency_ms,
         a.error

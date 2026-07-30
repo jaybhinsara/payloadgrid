@@ -14,8 +14,12 @@ type EventRow = {
   revenue_at_risk: number;
   received_at: string;
   response_status: number | null;
+  response_body: string | null;
   latency_ms: number | null;
   error: string | null;
+  attempt_count: number | null;
+  request_headers: Record<string, unknown>;
+  request_body: unknown;
 };
 type Dashboard = {
   ok: boolean;
@@ -51,6 +55,7 @@ function responseSummary(event: EventRow) {
   const detail = event.error || `${event.latency_ms || 0}ms`;
   return `${response} · ${detail}`;
 }
+
 function timeAgo(value: string) {
   const diff = Date.now() - new Date(value).getTime();
   const minutes = Math.max(1, Math.round(diff / 60000));
@@ -65,6 +70,8 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -86,9 +93,7 @@ export default function Home() {
   useEffect(() => {
     loadDashboard();
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadDashboard();
-      }
+      if (document.visibilityState === "visible") loadDashboard();
     }, 5000);
     return () => window.clearInterval(timer);
   }, [loadDashboard]);
@@ -97,6 +102,17 @@ export default function Home() {
     if (!data) return [];
     return providerFilter === "all" ? data.events : data.events.filter((event) => event.provider === providerFilter);
   }, [data, providerFilter]);
+
+  const selectedEvent = useMemo(() => {
+    if (!data || !selectedEventId) return null;
+    return data.events.find((event) => event.id === selectedEventId) || null;
+  }, [data, selectedEventId]);
+
+  async function copyText(label: string, value: string) {
+    await navigator.clipboard.writeText(value);
+    setCopiedValue(label);
+    window.setTimeout(() => setCopiedValue(null), 1600);
+  }
 
   async function createEndpoint(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,7 +166,7 @@ export default function Home() {
         </div>
         <div className="refresh-card">
           <small>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Waiting for data"}</small>
-          <button className="secondary" onClick={() => loadDashboard(true)}>Refresh now</button>
+          <button className="secondary" onClick={() => loadDashboard(true)}>{refreshing ? "Refreshing" : "Refresh now"}</button>
         </div>
       </header>
 
@@ -192,6 +208,7 @@ export default function Home() {
                 <strong>{endpoint.name}</strong>
                 <span>{endpoint.provider}</span>
                 <code>{data.appUrl}/in/{endpoint.id}</code>
+                <button className="secondary compact" onClick={() => copyText("endpoint", `${data.appUrl}/in/${endpoint.id}`)}>{copiedValue === "endpoint" ? "Copied" : "Copy URL"}</button>
                 <p>Forwards to {endpoint.destination_url}</p>
               </article>
             )) : <p className="empty">No endpoints yet. Create one to start receiving real webhook events.</p>}
@@ -215,15 +232,47 @@ export default function Home() {
             const endpoint = data?.endpoints.find((item) => item.id === event.endpoint_id);
             return (
               <article className="event-row" key={event.id}>
-                <div><strong style={{ padding: "2px" }}>{event.event_type}</strong><span>{event.provider} · {event.provider_event_id || event.id}</span></div>
-                <div><strong style={{ padding: "2px" }}>{endpoint?.name || "Endpoint"}</strong><span>{timeAgo(event.received_at)}</span></div>
-                <div><strong style={{ padding: "2px" }} className={`status ${statusClass(event.status)}`}>{formatStatus(event.status)}</strong><span>{responseSummary(event)}</span></div>
-                <button className="secondary" onClick={() => replay(event.id)}>Replay</button>
+                <div><strong>{event.event_type}</strong><span>{event.provider} · {event.provider_event_id || event.id}</span></div>
+                <div><strong>{endpoint?.name || "Endpoint"}</strong><span>{timeAgo(event.received_at)}</span></div>
+                <div><strong className={`status ${statusClass(event.status)}`}>{formatStatus(event.status)}</strong><span>{responseSummary(event)}</span></div>
+                <div className="event-actions"><button className="secondary" onClick={() => setSelectedEventId(event.id)}>Inspect</button><button className="secondary" onClick={() => replay(event.id)}>Replay</button></div>
               </article>
             );
           }) : <p className="empty">No webhook events yet. Send a POST request to one of your HookIn endpoint URLs.</p>}
         </div>
       </section>
+
+      {selectedEvent ? (
+        <aside className="drawer" aria-label="Event details">
+          <div className="drawer-card">
+            <div className="drawer-head">
+              <div>
+                <p className="section-kicker">Event details</p>
+                <h2>{selectedEvent.event_type}</h2>
+              </div>
+              <button className="secondary compact" onClick={() => setSelectedEventId(null)}>Close</button>
+            </div>
+            <div className="detail-grid">
+              <div><span>Status</span><strong>{formatStatus(selectedEvent.status)}</strong></div>
+              <div><span>Provider</span><strong>{selectedEvent.provider}</strong></div>
+              <div><span>Attempts</span><strong>{selectedEvent.attempt_count || 0}</strong></div>
+              <div><span>Risk</span><strong>{formatMoney(selectedEvent.revenue_at_risk)}</strong></div>
+            </div>
+            <section className="detail-block">
+              <div className="detail-title"><strong>Payload</strong><button className="secondary compact" onClick={() => copyText("payload", JSON.stringify(selectedEvent.request_body, null, 2))}>{copiedValue === "payload" ? "Copied" : "Copy"}</button></div>
+              <pre>{JSON.stringify(selectedEvent.request_body, null, 2)}</pre>
+            </section>
+            <section className="detail-block">
+              <div className="detail-title"><strong>Headers</strong><button className="secondary compact" onClick={() => copyText("headers", JSON.stringify(selectedEvent.request_headers, null, 2))}>{copiedValue === "headers" ? "Copied" : "Copy"}</button></div>
+              <pre>{JSON.stringify(selectedEvent.request_headers, null, 2)}</pre>
+            </section>
+            <section className="detail-block">
+              <div className="detail-title"><strong>Latest response</strong></div>
+              <pre>{selectedEvent.response_body || selectedEvent.error || "No response body captured."}</pre>
+            </section>
+          </div>
+        </aside>
+      ) : null}
     </main>
   );
 }
