@@ -1,123 +1,70 @@
 import { NextResponse } from "next/server";
+import { authErrorResponse, requireSession } from "@/lib/auth";
 import { appUrl, providers } from "@/lib/constants";
 import { requireSql } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-type CountRow = { count: string };
-
-type MetricRow = {
-  total_events: string;
-  failed_events: string;
-  retrying_events: string;
-  delivered_events: string;
-  revenue_at_risk: string;
-  avg_latency: string | null;
-};
-
-async function ensureDefaultProject() {
-  const sql = requireSql();
-  const name = process.env.HOOKIN_DEFAULT_PROJECT_NAME || "HookIn Workspace";
-  const slug = "default";
-  const existing = await sql`select id, name, slug from projects where slug = ${slug} limit 1`;
-  if (existing.length) return existing[0];
-  const created = await sql`insert into projects (name, slug) values (${name}, ${slug}) returning id, name, slug`;
-  return created[0];
-}
+type MetricRow = { total_events: string; failed_events: string; retrying_events: string; delivered_events: string; revenue_at_risk: string; avg_latency: string | null };
 
 export async function GET() {
   try {
+    const context = await requireSession();
     const sql = requireSql();
-    const project = await ensureDefaultProject();
-
-    const endpoints = await sql`
-      select id, name, provider, destination_url, is_active, created_at
-      from endpoints
-      where project_id = ${project.id}
-      order by created_at desc
-    `;
-
-    const events = await sql`
-      select
-        e.id,
-        e.endpoint_id,
-        e.provider,
-        e.provider_event_id,
-        e.event_type,
-        e.status,
-        e.revenue_at_risk,
-        e.received_at,
-        e.updated_at,
-        e.request_headers,
-        e.request_body,
-        coalesce(a.attempt_count, 0) as attempt_count,
-        a.response_body,
-        a.response_status,
-        a.latency_ms,
-        a.error
-      from webhook_events e
-      left join lateral (
-        select
-          latest.response_status,
-          latest.response_body,
-          latest.latency_ms,
-          latest.error,
-          (select count(*)::int from delivery_attempts counted where counted.event_id = e.id) as attempt_count
-        from delivery_attempts latest
-        where latest.event_id = e.id
-        order by latest.created_at desc
-        limit 1
-      ) a on true
-      where e.endpoint_id in (select id from endpoints where project_id = ${project.id})
-      order by e.received_at desc
-      limit 100
-    `;
-
-    const [metrics] = await sql`
-      select
-        count(*)::text as total_events,
-        count(*) filter (where status = 'failed')::text as failed_events,
-        count(*) filter (where status = 'retrying')::text as retrying_events,
-        count(*) filter (where status = 'delivered')::text as delivered_events,
-        coalesce(sum(revenue_at_risk) filter (where status <> 'delivered'), 0)::text as revenue_at_risk,
-        coalesce(avg(latest.latency_ms), 0)::text as avg_latency
-      from webhook_events e
-      left join lateral (
-        select latency_ms
-        from delivery_attempts
-        where event_id = e.id
-        order by created_at desc
-        limit 1
-      ) latest on true
-      where e.endpoint_id in (select id from endpoints where project_id = ${project.id})
-    `;
-
-    const [endpointCount] = await sql`select count(*)::text as count from endpoints where project_id = ${project.id}`;
-    const metricRow = metrics as MetricRow | undefined;
-    const countRow = endpointCount as CountRow | undefined;
-    const total = Number(metricRow?.total_events || 0);
-    const delivered = Number(metricRow?.delivered_events || 0);
-
+    const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, metricRows] = await Promise.all([
+      sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
+      sql`
+        select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.is_active, ep.created_at,
+          coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
+        from endpoints ep where ep.project_id = ${context.project.id} order by ep.created_at desc
+      `,
+      sql`
+        select e.id, e.endpoint_id, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
+          e.event_type, e.status, e.revenue_at_risk, e.received_at, e.updated_at, e.request_headers, e.request_body,
+          e.retry_count, e.max_retries, e.next_retry_at, e.last_error,
+          coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
+        from webhook_events e
+        left join lateral (
+          select latest.response_status, latest.response_body, latest.latency_ms, latest.error,
+            (select count(*)::int from delivery_attempts counted where counted.event_id = e.id) as attempt_count
+          from delivery_attempts latest where latest.event_id = e.id order by latest.created_at desc limit 1
+        ) a on true
+        where e.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
+        order by e.received_at desc limit 100
+      `,
+      sql`select id, application_id, event_type, status, created_at from messages where project_id = ${context.project.id} order by created_at desc limit 50`,
+      sql`select id, name, description, schema, created_at from event_types where project_id = ${context.project.id} order by name asc`,
+      sql`select id, name, key_prefix, last_used_at, revoked_at, created_at from api_keys where project_id = ${context.project.id} order by created_at desc`,
+      sql`select u.id, u.name, u.email, om.role, om.created_at from organization_members om join users u on u.id = om.user_id where om.organization_id = ${context.organization.id} order by om.created_at asc`,
+      sql`select id, name, event_type, config, is_active, created_at from transformations where project_id = ${context.project.id} order by created_at desc`,
+      sql`select id, name, channel, destination, failure_threshold, is_active, created_at from alert_rules where project_id = ${context.project.id} order by created_at desc`,
+      sql`select id, action, resource_type, resource_id, metadata, created_at from audit_logs where organization_id = ${context.organization.id} order by created_at desc limit 30`,
+      sql`
+        select count(*)::text as total_events,
+          count(*) filter (where status = 'failed')::text as failed_events,
+          count(*) filter (where status = 'retrying')::text as retrying_events,
+          count(*) filter (where status = 'delivered')::text as delivered_events,
+          coalesce(sum(revenue_at_risk) filter (where status <> 'delivered'), 0)::text as revenue_at_risk,
+          coalesce(avg(latest.latency_ms), 0)::text as avg_latency
+        from webhook_events e
+        left join lateral (select latency_ms from delivery_attempts where event_id = e.id order by created_at desc limit 1) latest on true
+        where e.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
+      `
+    ]);
+    const metric = metricRows[0] as MetricRow | undefined;
+    const total = Number(metric?.total_events || 0); const delivered = Number(metric?.delivered_events || 0);
     return NextResponse.json({
-      ok: true,
-      appUrl: appUrl(),
-      providers,
-      project,
-      endpoints,
-      events,
+      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs,
       metrics: {
-        totalEvents: total,
-        failedEvents: Number(metricRow?.failed_events || 0),
-        retryingEvents: Number(metricRow?.retrying_events || 0),
-        openIncidents: Number(metricRow?.failed_events || 0) + Number(metricRow?.retrying_events || 0),
-        successRate: total ? Math.round((delivered / total) * 1000) / 10 : 0,
-        avgLatency: Math.round(Number(metricRow?.avg_latency || 0)),
-        revenueAtRisk: Number(metricRow?.revenue_at_risk || 0),
-        endpoints: Number(countRow?.count || 0)
+        totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0),
+        openIncidents: Number(metric?.failed_events || 0) + Number(metric?.retrying_events || 0),
+        successRate: total ? Math.round((delivered / total) * 1000) / 10 : 100,
+        avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: Number(metric?.revenue_at_risk || 0), endpoints: endpoints.length
       }
     });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Dashboard failed" }, { status: 500 });
+    const result = authErrorResponse(error);
+    return NextResponse.json({ ok: false, error: result.message }, { status: result.status });
   }
 }
-
