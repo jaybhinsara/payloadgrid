@@ -1,87 +1,123 @@
 # PayloadGrid
 
-Multi-tenant webhook infrastructure built with Next.js, Vercel route handlers, and Neon Postgres.
+PayloadGrid is a multi-tenant inbound and outbound webhook platform for Indian SaaS and payment teams. The application uses Next.js on Vercel, Neon Postgres, and Upstash QStash for durable delivery jobs.
 
-## What is implemented
+## Implemented
 
-- Email/password accounts with scrypt password hashing and secure 30-day HTTP-only sessions
-- Organizations, role-based members, projects, applications, and tenant-scoped queries
-- Joinable organization invitation links
-- Outbound message API with hashed API keys and idempotency keys
-- Application endpoints with event subscriptions and endpoint-specific HMAC secrets
-- Inbound provider gateway at `/in/:endpointId`
-- Outbound fan-out, response capture, exponential retries, replay, and delivery inspection
-- Razorpay, Stripe, Cashfree, Shopify, and custom provider metadata
-- Payload transformations, event types, alerts, audit logs, and revenue-at-risk metrics
-- Slack/custom-webhook alerts plus email alerts through Resend
-- Responsive marketing site, signup/login, and operational console
+- Email/password accounts, optional email verification, password reset, secure HTTP-only sessions
+- Organizations, roles, projects, applications, team invitations, and tenant-scoped queries
+- Hashed API keys, idempotent message acceptance, event subscriptions, and transformations
+- Durable asynchronous delivery jobs with atomic database claiming and a Vercel `after` fallback
+- Automatic retry scheduling, manual replay, complete attempt capture, and failure alerts
+- Razorpay, Cashfree, Stripe, and Shopify raw-body signature verification
+- AES-256-GCM encryption for provider verification secrets
+- HMAC-SHA256 signing for PayloadGrid outbound delivery
+- HTTPS enforcement, private-address SSRF checks, payload limits, rate limits, and duplicate protection
+- Three-day beta payload retention with scheduled redaction
+- Public documentation, OpenAPI description, pricing, security, privacy, terms, contact, status, and no-signup playground
+- Source-ready Node.js and Python clients under `sdks/` (not published yet)
 
 ## Local setup
 
-1. Copy `.env.example` to `.env.local` and set `DATABASE_URL` and `CRON_SECRET`. Set the site URL variables when you need a non-local public URL.
-2. Run the complete `db/schema.sql` file in the Neon SQL editor. It is idempotent and upgrades the earlier PayloadGrid prototype tables.
-3. Install dependencies and start the application:
+1. Copy `app/.env.example` to `app/.env.local`.
+2. Set `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `PAYLOADGRID_APP_URL`, `CRON_SECRET`, and `PAYLOADGRID_ENCRYPTION_KEY`.
+3. Run the complete `app/db/schema.sql` file in the Neon SQL editor. It is idempotent and includes all beta migrations.
+4. Install and start:
 
 ```powershell
+cd app
 npm.cmd install
 npm.cmd run dev
 ```
 
-Open `http://localhost:3200`, create an account, then create an endpoint and API key in the console.
+Open `http://localhost:3200`.
 
-## Vercel setup
+Generate encryption and cron secrets with Node.js:
 
-Set the Vercel Root Directory to `app`. Add these Production and Preview environment variables:
-
-- `DATABASE_URL`: Neon pooled connection string
-- `NEXT_PUBLIC_SITE_URL`: your canonical public URL, for example `https://payloadgrid.com`
-- `PAYLOADGRID_APP_URL`: optional server-side URL override; Vercel deployment URLs are detected automatically
-- `CRON_SECRET`: long random secret used by retry processing
-- `RESEND_API_KEY`: optional, only for email alerts
-- `PAYLOADGRID_ALERT_FROM`: optional verified sender, only for email alerts
-
-The repository intentionally does not register a frequent Vercel cron in `vercel.json`, because Vercel Hobby only supports daily cron jobs. Use an external scheduler to call this route every 1-5 minutes:
-
-```text
-GET https://your-domain.com/api/cron/retry-failed
-Authorization: Bearer YOUR_CRON_SECRET
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Send an outbound webhook
+Use the base64 value for `PAYLOADGRID_ENCRYPTION_KEY` and the hex value for `CRON_SECRET`. Keep both stable; changing the encryption key makes stored provider secrets unreadable.
 
-Create an application, endpoint, and API key in the console, then call:
+## Vercel and Neon
+
+Set the Vercel Root Directory to `app`. Add these Production and Preview variables:
+
+- `DATABASE_URL`: Neon pooled connection string
+- `NEXT_PUBLIC_SITE_URL`: canonical public URL without a trailing slash
+- `PAYLOADGRID_APP_URL`: same public URL for server-generated links and queue callbacks
+- `NEXT_PUBLIC_SUPPORT_EMAIL`: public support address
+- `PAYLOADGRID_ENCRYPTION_KEY`: stable 32-byte base64 or 64-character hex key
+- `CRON_SECRET`: independent random secret for protected maintenance and fallback routes
+
+Run `app/db/schema.sql` in Neon before deploying code that uses the new columns.
+
+## Durable queue
+
+Create an Upstash QStash account and add:
+
+- `QSTASH_TOKEN`
+- `QSTASH_CURRENT_SIGNING_KEY`
+- `QSTASH_NEXT_SIGNING_KEY`
+
+PayloadGrid publishes one signed job per delivery to `/api/jobs/deliver`. The worker atomically claims each database event, so QStash retries cannot create duplicate attempts. Without QStash, Vercel `after` performs best-effort delivery and the database retains queued events, but this fallback is not a production durability guarantee.
+
+Configure two protected schedules in QStash:
+
+```text
+GET https://YOUR_DOMAIN/api/cron/retry-failed
+Authorization: Bearer YOUR_CRON_SECRET
+Schedule: every minute
+
+GET https://YOUR_DOMAIN/api/cron/maintenance
+Authorization: Bearer YOUR_CRON_SECRET
+Schedule: daily
+```
+
+The first route drains stranded queued/retry events. The second redacts expired payloads and removes expired sessions and rate-limit windows.
+
+## Transactional email
+
+For verified new accounts and password reset, configure:
+
+- `RESEND_API_KEY`
+- `PAYLOADGRID_AUTH_FROM`: a verified sender such as `PayloadGrid <auth@your-domain.com>`
+
+When these are absent, existing beta authentication remains available and new accounts are marked verified automatically. Add email configuration before inviting external users.
+
+Optional alert variables:
+
+- `PAYLOADGRID_ALERT_FROM`
+- `RESEND_API_KEY`
+
+## Public API
 
 ```bash
-curl -X POST https://your-domain.com/api/v1/messages \
+curl -X POST https://YOUR_DOMAIN/api/v1/messages \
   -H "Authorization: Bearer pg_live_YOUR_KEY" \
   -H "Idempotency-Key: order_8921_completed" \
   -H "Content-Type: application/json" \
   -d '{
-    "applicationId": "YOUR_APPLICATION_UUID",
+    "applicationId": "APPLICATION_UUID",
     "eventType": "order.completed",
     "payload": { "orderId": "8921", "status": "completed" }
   }'
 ```
 
-The call returns `202` after immediate delivery attempts are recorded. Failed attempts enter the retry queue.
+A new message returns `202` with `status: "accepted"`. Final endpoint states are processed asynchronously and appear in the dashboard.
 
-## Verify a PayloadGrid signature
+## Provider verification
 
-Every signed delivery contains:
-
-- `payloadgrid-id`: delivery event UUID
-- `payloadgrid-timestamp`: Unix timestamp
-- `payloadgrid-signature`: `v1,<base64 HMAC-SHA256>`
-
-Calculate HMAC-SHA256 over `${payloadgrid-id}.${payloadgrid-timestamp}.${rawRequestBody}` using the endpoint signing secret, base64-encode it, and compare it with the value after `v1,`. Also reject old timestamps to prevent replay attacks.
+When creating a Razorpay, Cashfree, Stripe, or Shopify endpoint, enter the corresponding provider webhook secret. PayloadGrid encrypts it before storage and rejects inbound events with missing, invalid, or expired signatures. Custom endpoints do not require provider verification.
 
 ## Validation
 
 ```powershell
+cd app
 npm.cmd run typecheck
 npm.cmd run build
 ```
 
-## Production boundaries
-
-PayloadGrid now has a real multi-tenant SaaS foundation and working delivery workflows. Before charging external customers, complete an independent security review, add email verification/password reset, connect usage metering and billing, move high-volume delivery/retries to a durable queue, and add provider-specific inbound signature verification.
+The public beta does not claim an SLA or compliance certification. Before charging customers, complete an independent security review, external monitoring history, legal review, queue load testing, backup recovery testing, SDK publication, usage billing, and customer validation.

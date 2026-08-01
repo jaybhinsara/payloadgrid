@@ -5,11 +5,11 @@ export function MarketingHero() {
   return <section className="future-hero">
     <div className="hero-signal-line" aria-hidden="true"><span>EVENT_01</span><i /><span>ROUTED</span><i /><span>DELIVERED</span></div>
     <div className="future-hero-copy" data-reveal>
-      <span className="signal-label"><i /> Webhook infrastructure for product teams</span>
-      <h1>Reliable webhook infrastructure</h1>
-      <p>Send events to customers and receive callbacks from providers through one secure control plane. PayloadGrid handles fan-out, signatures, retries, replay, and the evidence your team needs when delivery fails.</p>
-      <div className="hero-actions"><Link className="button primary large" href="/signup">Start building free <ArrowRight size={18} /></Link><a className="button secondary large" href="#developers"><Code2 size={18} /> See the API</a></div>
-      <div className="trust-line"><span><Check size={15} /> No card required</span><span><Check size={15} /> Outbound + inbound</span><span><Check size={15} /> Multi-tenant workspace</span></div>
+      <span className="signal-label"><i /> Public beta · Built for Indian SaaS and payments</span>
+      <h1>Payment webhooks your team can operate.</h1>
+      <p>Receive Razorpay, Cashfree, Stripe, and Shopify callbacks, or send customer-facing events through one control plane with verification, durable retries, replay, and delivery evidence.</p>
+      <div className="hero-actions"><Link className="button primary large" href="/signup">Start building free <ArrowRight size={18} /></Link><Link className="button secondary large" href="/playground"><Code2 size={18} /> Open playground</Link></div>
+      <div className="trust-line"><span><Check size={15} /> 10,000 beta events</span><span><Check size={15} /> Outbound + inbound</span><span><Check size={15} /> Multi-tenant workspace</span></div>
     </div>
     <div className="control-plane" data-reveal aria-label="PayloadGrid delivery control plane">
       <div className="plane-topbar"><div><span /><span /><span /></div><code>payloadgrid / production / live</code><i><Radio size={12} /> CONNECTED</i></div>

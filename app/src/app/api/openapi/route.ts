@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import { SITE_URL } from "@/lib/site";
+
+export function GET() {
+  return NextResponse.json({
+    openapi: "3.1.0",
+    info: { title: "PayloadGrid API", version: "0.2.0-beta", description: "Accept outbound webhook messages and provider callbacks. Public beta limits apply." },
+    servers: [{ url: SITE_URL }],
+    paths: {
+      "/api/v1/messages": {
+        post: {
+          summary: "Accept an outbound message", operationId: "createMessage",
+          security: [{ bearerAuth: [] }],
+          parameters: [{ in: "header", name: "Idempotency-Key", required: false, schema: { type: "string", maxLength: 200 }, description: "Unique key for one logical event." }],
+          requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateMessage" } } } },
+          responses: {
+            "202": { description: "Message persisted and accepted for asynchronous delivery.", content: { "application/json": { schema: { $ref: "#/components/schemas/AcceptedMessage" } } } },
+            "200": { description: "Idempotent duplicate; existing message returned." }, "401": { description: "Invalid or revoked API key." }, "429": { description: "Rate or monthly beta limit exceeded." }
+          }
+        }
+      },
+      "/in/{endpointId}": {
+        post: {
+          summary: "Accept an inbound provider webhook", operationId: "receiveProviderWebhook",
+          parameters: [{ in: "path", name: "endpointId", required: true, schema: { type: "string", format: "uuid" } }],
+          requestBody: { required: true, content: { "application/json": { schema: {} } } },
+          responses: { "200": { description: "Provider request verified, deduplicated, and accepted." }, "401": { description: "Provider signature verification failed." }, "413": { description: "Payload exceeds 256 KB." }, "429": { description: "Rate or monthly beta limit exceeded." } }
+        }
+      },
+      "/api/health": { get: { summary: "Read public component health", operationId: "getHealth", responses: { "200": { description: "Live component health." }, "503": { description: "Database unavailable." } } } }
+    },
+    components: {
+      securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "PayloadGrid API key" } },
+      schemas: {
+        CreateMessage: { type: "object", required: ["applicationId", "eventType", "payload"], properties: { applicationId: { type: "string", format: "uuid" }, eventType: { type: "string", minLength: 1, maxLength: 120, examples: ["order.completed"] }, payload: {} } },
+        AcceptedMessage: { type: "object", required: ["ok", "messageId", "status", "queuedDeliveries"], properties: { ok: { type: "boolean", const: true }, messageId: { type: "string", format: "uuid" }, status: { type: "string", enum: ["accepted", "delivered"] }, duplicate: { type: "boolean" }, queuedDeliveries: { type: "integer" }, queueConfigured: { type: "boolean" } } }
+      }
+    }
+  }, { headers: { "cache-control": "public, max-age=300" } });
+}

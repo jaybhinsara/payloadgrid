@@ -5,3 +5,4 @@ export const SITE_URL = (
   process.env.PAYLOADGRID_APP_URL ||
   (vercelHost ? `https://${vercelHost}` : "http://localhost:3200")
 ).replace(/\/$/, "");
+export const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "hello@payloadgrid.com";

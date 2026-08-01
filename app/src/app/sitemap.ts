@@ -1,11 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/site";
 
+const pages = ["", "/docs", "/pricing", "/playground", "/security", "/status", "/about", "/contact", "/privacy", "/terms"];
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [{
-    url: SITE_URL,
-    lastModified: new Date(),
-    changeFrequency: "weekly",
-    priority: 1
-  }];
+  return pages.map((path, index) => ({ url: `${SITE_URL}${path}`, changeFrequency: path === "/status" ? "daily" : "weekly", priority: index === 0 ? 1 : path === "/docs" ? 0.9 : 0.7 }));
 }

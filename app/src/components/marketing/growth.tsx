@@ -23,12 +23,12 @@ export function SecuritySection() {
 }
 
 const apiExamples = {
-  curl: `curl -X POST https://payloadgrid.com/api/v1/messages \\
+  curl: `curl -X POST /api/v1/messages \\
   -H "Authorization: Bearer pg_live_..." \\
   -H "Idempotency-Key: order_8921_completed" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "applicationId": "app_01JHF8Q9",
+    "applicationId": "APPLICATION_UUID",
     "eventType": "order.completed",
     "payload": {
       "orderId": "8921",
@@ -36,7 +36,7 @@ const apiExamples = {
     }
   }'`,
   node: `const response = await fetch(
-  "https://payloadgrid.com/api/v1/messages",
+  "/api/v1/messages",
   {
     method: "POST",
     headers: {
@@ -45,7 +45,7 @@ const apiExamples = {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      applicationId: "app_01JHF8Q9",
+      applicationId: "APPLICATION_UUID",
       eventType: "order.completed",
       payload: { orderId: "8921", status: "completed" }
     })
@@ -56,13 +56,13 @@ const message = await response.json();`,
   python: `import requests
 
 response = requests.post(
-    "https://payloadgrid.com/api/v1/messages",
+    "/api/v1/messages",
     headers={
         "Authorization": "Bearer pg_live_...",
         "Idempotency-Key": "order_8921_completed",
     },
     json={
-        "applicationId": "app_01JHF8Q9",
+        "applicationId": "APPLICATION_UUID",
         "eventType": "order.completed",
         "payload": {
             "orderId": "8921",
@@ -78,7 +78,7 @@ export function DeveloperSection() {
   const [language, setLanguage] = useState<keyof typeof apiExamples>("curl");
   return <section className="developer-section" id="developers">
     <div className="developer-intro" data-reveal><span className="section-label">Developer adoption</span><h2>One API call between your product and every destination.</h2><p>PayloadGrid uses ordinary HTTPS and JSON, so any backend language can send events. Start in the console, generate a key, then move the exact same workflow into production code.</p><div className="integration-steps"><div><span>1</span><strong>Create an application</strong><small>Represent the customer or product context.</small></div><div><span>2</span><strong>Add destinations</strong><small>Choose subscriptions and copy signing secrets.</small></div><div><span>3</span><strong>Send a message</strong><small>PayloadGrid fans out and operates delivery.</small></div></div></div>
-    <div className="api-studio" data-reveal><div className="studio-tabs" role="tablist" aria-label="API example language"><button role="tab" aria-selected={language === "curl"} className={language === "curl" ? "active" : ""} onClick={() => setLanguage("curl")}><TerminalSquare size={15} /> cURL</button><button role="tab" aria-selected={language === "node"} className={language === "node" ? "active" : ""} onClick={() => setLanguage("node")}>Node.js</button><button role="tab" aria-selected={language === "python"} className={language === "python" ? "active" : ""} onClick={() => setLanguage("python")}>Python</button><em>POST /api/v1/messages</em></div><pre><code>{apiExamples[language]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "delivered", "deliveries": 3 }'}</code></div></div>
+    <div className="api-studio" data-reveal><div className="studio-tabs" role="tablist" aria-label="API example language"><button role="tab" aria-selected={language === "curl"} className={language === "curl" ? "active" : ""} onClick={() => setLanguage("curl")}><TerminalSquare size={15} /> cURL</button><button role="tab" aria-selected={language === "node"} className={language === "node" ? "active" : ""} onClick={() => setLanguage("node")}>Node.js</button><button role="tab" aria-selected={language === "python"} className={language === "python" ? "active" : ""} onClick={() => setLanguage("python")}>Python</button><em>POST /api/v1/messages</em></div><pre><code>{apiExamples[language]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div>
   </section>;
 }
 

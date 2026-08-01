@@ -1,4 +1,5 @@
 import { createWebhookSignature } from "@/lib/security";
+import { assertSafeDestinationUrl } from "@/lib/destination-security";
 
 export type DeliveryResult = {
   ok: boolean;
@@ -29,6 +30,7 @@ export async function deliverWebhook(
   } : {};
 
   try {
+    await assertSafeDestinationUrl(destinationUrl);
     const response = await fetch(destinationUrl, {
       method: "POST",
       headers: {

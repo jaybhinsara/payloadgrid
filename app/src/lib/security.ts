@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
@@ -37,4 +37,26 @@ export function createWebhookSignature(secret: string, deliveryId: string, times
 export function createApiKey() {
   const token = `pg_live_${randomToken(30)}`;
   return { token, prefix: token.slice(0, 16), hash: sha256(token) };
+}
+function secretEncryptionKey() {
+  const configured = process.env.PAYLOADGRID_ENCRYPTION_KEY;
+  if (!configured) throw new Error("PAYLOADGRID_ENCRYPTION_KEY is required to store provider secrets");
+  const key = /^[a-f0-9]{64}$/i.test(configured) ? Buffer.from(configured, "hex") : Buffer.from(configured, "base64");
+  if (key.length !== 32) throw new Error("PAYLOADGRID_ENCRYPTION_KEY must be 32 bytes encoded as base64 or 64 hex characters");
+  return key;
+}
+
+export function encryptSecret(value: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", secretEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  return `v1.${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${encrypted.toString("base64url")}`;
+}
+
+export function decryptSecret(value: string) {
+  const [version, ivValue, tagValue, encryptedValue] = value.split(".");
+  if (version !== "v1" || !ivValue || !tagValue || !encryptedValue) throw new Error("Stored secret format is invalid");
+  const decipher = createDecipheriv("aes-256-gcm", secretEncryptionKey(), Buffer.from(ivValue, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(encryptedValue, "base64url")), decipher.final()]).toString("utf8");
 }

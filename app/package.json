@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",
+    "@upstash/qstash": "^2.11.3",
     "@vercel/analytics": "^2.0.1",
     "lucide-react": "^1.28.0",
     "next": "latest",

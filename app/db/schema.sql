@@ -6,8 +6,22 @@ create table if not exists users (
   name text not null,
   password_hash text not null,
   email_verified_at timestamptz,
+  verification_required boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+alter table users add column if not exists verification_required boolean not null default false;
+
+create table if not exists auth_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  kind text not null check (kind in ('verify_email','reset_password')),
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_id, kind)
 );
 
 create table if not exists organizations (
@@ -121,7 +135,8 @@ create table if not exists webhook_events (
   event_type text not null,
   request_headers jsonb not null default '{}'::jsonb,
   request_body jsonb not null default '{}'::jsonb,
-  status text not null default 'received' check (status in ('received', 'delivered', 'failed', 'retrying')),
+  status text not null default 'queued' check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying')),
+  revenue_amount integer not null default 0,
   revenue_at_risk integer not null default 0,
   retry_count integer not null default 0,
   max_retries integer not null default 4,
@@ -134,10 +149,17 @@ create table if not exists webhook_events (
 alter table webhook_events add column if not exists application_id uuid references applications(id) on delete cascade;
 alter table webhook_events add column if not exists message_id uuid references messages(id) on delete cascade;
 alter table webhook_events add column if not exists direction text not null default 'inbound';
+alter table webhook_events add column if not exists revenue_amount integer not null default 0;
 alter table webhook_events add column if not exists retry_count integer not null default 0;
 alter table webhook_events add column if not exists max_retries integer not null default 4;
 alter table webhook_events add column if not exists next_retry_at timestamptz;
 alter table webhook_events add column if not exists last_error text;
+alter table webhook_events add column if not exists locked_at timestamptz;
+alter table webhook_events add column if not exists payload_expires_at timestamptz not null default (now() + interval '3 days');
+alter table webhook_events add column if not exists payload_redacted_at timestamptz;
+alter table webhook_events alter column status set default 'queued';
+alter table webhook_events drop constraint if exists webhook_events_status_check;
+alter table webhook_events add constraint webhook_events_status_check check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying'));
 
 create table if not exists delivery_attempts (
   id uuid primary key default gen_random_uuid(),
@@ -156,6 +178,10 @@ create table if not exists delivery_attempts (
 alter table delivery_attempts add column if not exists request_headers jsonb not null default '{}'::jsonb;
 alter table delivery_attempts add column if not exists response_headers jsonb not null default '{}'::jsonb;
 
+alter table endpoints add column if not exists provider_secret_encrypted text;
+alter table endpoints add column if not exists provider_verification_required boolean not null default false;
+alter table endpoints add column if not exists provider_secret_hint text;
+
 create table if not exists api_keys (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects(id) on delete cascade,
@@ -169,6 +195,19 @@ create table if not exists api_keys (
   created_at timestamptz not null default now()
 );
 
+create table if not exists api_usage_windows (
+  api_key_id uuid not null references api_keys(id) on delete cascade,
+  window_start timestamptz not null,
+  request_count integer not null default 0,
+  primary key (api_key_id, window_start)
+);
+
+create table if not exists endpoint_usage_windows (
+  endpoint_id uuid not null references endpoints(id) on delete cascade,
+  window_start timestamptz not null,
+  request_count integer not null default 0,
+  primary key (endpoint_id, window_start)
+);
 create table if not exists transformations (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects(id) on delete cascade,
@@ -216,7 +255,16 @@ create table if not exists audit_logs (
 );
 
 create index if not exists organization_members_user_id_idx on organization_members(user_id);
+with duplicate_pending_invitations as (
+  select id, row_number() over (partition by organization_id, lower(email) order by created_at desc, id desc) as duplicate_rank
+  from organization_invitations
+  where accepted_at is null
+)
+delete from organization_invitations
+where id in (select id from duplicate_pending_invitations where duplicate_rank > 1);
+create unique index if not exists organization_invitations_pending_email_idx on organization_invitations(organization_id, email) where accepted_at is null;
 create index if not exists sessions_token_hash_idx on sessions(token_hash);
+create index if not exists auth_tokens_expiry_idx on auth_tokens(expires_at) where used_at is null;
 create index if not exists sessions_expires_at_idx on sessions(expires_at);
 create index if not exists projects_organization_id_idx on projects(organization_id);
 create index if not exists applications_project_id_idx on applications(project_id);
@@ -229,6 +277,16 @@ create index if not exists webhook_events_application_id_received_at_idx on webh
 create index if not exists webhook_events_message_id_idx on webhook_events(message_id);
 create index if not exists webhook_events_status_received_at_idx on webhook_events(status, received_at desc);
 create index if not exists webhook_events_next_retry_at_idx on webhook_events(next_retry_at) where status = 'retrying';
+create index if not exists webhook_events_queue_idx on webhook_events(status, received_at) where status in ('queued', 'processing', 'retrying');
+with duplicate_provider_events as (
+  select id, row_number() over (partition by endpoint_id, provider_event_id order by received_at asc, id asc) as duplicate_rank
+  from webhook_events
+  where provider_event_id is not null
+)
+update webhook_events set provider_event_id = null
+where id in (select id from duplicate_provider_events where duplicate_rank > 1);
+create unique index if not exists webhook_events_provider_dedup_idx on webhook_events(endpoint_id, provider_event_id) where provider_event_id is not null;
+create index if not exists webhook_events_payload_expiry_idx on webhook_events(payload_expires_at) where payload_redacted_at is null;
 create index if not exists delivery_attempts_event_id_idx on delivery_attempts(event_id);
 create index if not exists api_keys_project_id_idx on api_keys(project_id);
 create index if not exists transformations_project_id_idx on transformations(project_id);

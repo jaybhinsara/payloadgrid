@@ -1,0 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "payloadgrid"
+version = "0.1.0b1"
+description = "Python client and signature verification for PayloadGrid"
+requires-python = ">=3.10"
+license = "MIT"

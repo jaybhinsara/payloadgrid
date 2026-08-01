@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { authErrorResponse, requireSession } from "@/lib/auth";
 import { appUrl, providers } from "@/lib/constants";
 import { requireSql } from "@/lib/db";
+import { queueConfigured } from "@/lib/queue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type MetricRow = { total_events: string; failed_events: string; retrying_events: string; delivered_events: string; revenue_at_risk: string; avg_latency: string | null };
+type MetricRow = { total_events: string; terminal_events: string; queued_events: string; processing_events: string; failed_events: string; retrying_events: string; delivered_events: string; revenue_at_risk: string; avg_latency: string | null };
 
 export async function GET() {
   try {
@@ -15,7 +16,7 @@ export async function GET() {
     const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, metricRows] = await Promise.all([
       sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
       sql`
-        select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.is_active, ep.created_at,
+        select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active, ep.created_at,
           coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
         from endpoints ep where ep.project_id = ${context.project.id} order by ep.created_at desc
       `,
@@ -42,6 +43,9 @@ export async function GET() {
       sql`select id, action, resource_type, resource_id, metadata, created_at from audit_logs where organization_id = ${context.organization.id} order by created_at desc limit 30`,
       sql`
         select count(*)::text as total_events,
+          count(*) filter (where status in ('delivered','failed'))::text as terminal_events,
+          count(*) filter (where status = 'queued')::text as queued_events,
+          count(*) filter (where status = 'processing')::text as processing_events,
           count(*) filter (where status = 'failed')::text as failed_events,
           count(*) filter (where status = 'retrying')::text as retrying_events,
           count(*) filter (where status = 'delivered')::text as delivered_events,
@@ -53,13 +57,13 @@ export async function GET() {
       `
     ]);
     const metric = metricRows[0] as MetricRow | undefined;
-    const total = Number(metric?.total_events || 0); const delivered = Number(metric?.delivered_events || 0);
+    const total = Number(metric?.total_events || 0); const terminal = Number(metric?.terminal_events || 0); const delivered = Number(metric?.delivered_events || 0);
     return NextResponse.json({
-      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs,
+      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, system: { queueConfigured: queueConfigured() },
       metrics: {
-        totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0),
+        totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0), queuedEvents: Number(metric?.queued_events || 0), processingEvents: Number(metric?.processing_events || 0),
         openIncidents: Number(metric?.failed_events || 0) + Number(metric?.retrying_events || 0),
-        successRate: total ? Math.round((delivered / total) * 1000) / 10 : 100,
+        successRate: terminal ? Math.round((delivered / terminal) * 1000) / 10 : 100,
         avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: Number(metric?.revenue_at_risk || 0), endpoints: endpoints.length
       }
     });
