@@ -166,6 +166,9 @@ p { color: var(--muted); line-height: 1.6; }
 .alert-banner { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1cbc5; background: var(--red-bg); padding: 11px 26px; color: var(--red); font-size: 12px; font-weight: 650; }
 .alert-banner span { flex: 1; }
 .alert-banner button { background: transparent; color: inherit; }
+.notice-banner { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #a8d9bf; background: var(--green-bg); padding: 11px 26px; color: var(--green); font-size: 12px; font-weight: 650; }
+.notice-banner span { flex: 1; }
+.notice-banner button { background: transparent; color: inherit; }
 .content-head { display: flex; min-height: 72px; align-items: flex-start; justify-content: space-between; gap: 30px; margin-bottom: 20px; }
 .content-head h2 { margin: 7px 0 5px; font-size: 26px; }
 .content-head p { max-width: 720px; margin: 0; font-size: 13px; }

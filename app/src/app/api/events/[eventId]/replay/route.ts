@@ -4,7 +4,7 @@ import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { processDelivery } from "@/lib/delivery-worker";
 import { requireSql } from "@/lib/db";
-import { enqueueDelivery } from "@/lib/queue";
+import { enqueueDelivery, queueErrorMessage } from "@/lib/queue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,13 +23,18 @@ export async function POST(_request: Request, contextValue: { params: Promise<{ 
     const attempt = Number(attemptCount.count || 0) + 1;
     await sql`update webhook_events set status = 'queued', locked_at = null, next_retry_at = null, max_retries = greatest(max_retries, ${attempt + 1}), updated_at = now() where id = ${event.id}`;
     let scheduled = false;
+    let queueError: string | null = null;
     try {
       const queued = await enqueueDelivery({ eventId: String(event.id), endpointId: String(event.endpoint_id), attempt, rateLimitPerMinute: Number(event.rate_limit_per_minute) });
       scheduled = queued.queued;
-    } catch { scheduled = false; }
+      if (!queued.queued) queueError = queued.reason;
+    } catch (error) {
+      queueError = queueErrorMessage(error);
+      console.error("QStash replay publish failed", { eventId: String(event.id), error: queueError });
+    }
     if (!scheduled) after(() => processDelivery(String(event.id)));
-    await writeAudit(context.organization.id, context.user.id, "event.replay_accepted", "event", String(event.id));
-    return NextResponse.json({ ok: true, status: "accepted", scheduled }, { status: 202 });
+    await writeAudit(context.organization.id, context.user.id, "event.replay_accepted", "event", String(event.id), { scheduled, deliveryMode: scheduled ? "qstash" : "fallback", queueError });
+    return NextResponse.json({ ok: true, status: "accepted", scheduled, deliveryMode: scheduled ? "qstash" : "fallback", queueError }, { status: 202 });
   } catch (error) {
     const result = authErrorResponse(error);
     return NextResponse.json({ ok: false, error: result.message }, { status: result.status });

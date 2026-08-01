@@ -13,6 +13,13 @@ export function queueConfigured() {
   return Boolean(process.env.QSTASH_TOKEN && process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY);
 }
 
+export function queueErrorMessage(error: unknown) {
+  let message = error instanceof Error ? error.message : "QStash publish failed";
+  const token = process.env.QSTASH_TOKEN;
+  if (token) message = message.replaceAll(token, "[redacted]");
+  return message.slice(0, 300);
+}
+
 export async function enqueueDelivery(input: QueueDeliveryInput) {
   if (!process.env.QSTASH_TOKEN) return { queued: false as const, reason: "QStash is not configured" };
   const client = new Client({ token: process.env.QSTASH_TOKEN });
