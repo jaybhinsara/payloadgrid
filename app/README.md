@@ -1,6 +1,6 @@
 # PayloadGrid
 
-PayloadGrid is a multi-tenant inbound and outbound webhook platform for Indian SaaS and payment teams. The application uses Next.js on Vercel, Neon Postgres, and Upstash QStash for durable delivery jobs.
+PayloadGrid is a multi-tenant inbound and outbound webhook platform for SaaS, commerce, and developer teams worldwide. The application uses Next.js on Vercel, Neon Postgres, and Upstash QStash for durable delivery jobs.
 
 ## Implemented
 

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Copy, LoaderCircle, Play, RefreshCw, ShieldCheck } from "lucide-react";
 
 const presets = {
-  "payment.captured": { event: "payment.captured", payload: { paymentId: "pay_demo_8921", amount: 9999, currency: "INR" } },
+  "payment.captured": { event: "payment.captured", payload: { paymentId: "pay_demo_8921", amount: 9999, currency: "USD" } },
   "order.completed": { event: "order.completed", payload: { orderId: "order_demo_184", status: "completed" } },
   "invoice.payment_failed": { event: "invoice.payment_failed", payload: { invoiceId: "inv_demo_204", attempt: 1 } }
 };

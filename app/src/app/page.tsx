@@ -15,9 +15,9 @@ const structuredData = {
     {
       "@type": "WebApplication", "@id": `${SITE_URL}/#application`, name: "PayloadGrid", url: SITE_URL,
       applicationCategory: "DeveloperApplication", operatingSystem: "Any", browserRequirements: "Requires a modern web browser",
-      description: "Webhook infrastructure for Indian SaaS and payment teams to send, receive, sign, retry, replay, and monitor events.",
+      description: "Global webhook infrastructure for SaaS and developer teams to send, receive, sign, retry, replay, and monitor events.",
       featureList: ["Inbound and outbound webhooks", "Automatic webhook retries", "Webhook replay and delivery logs", "Provider signature verification", "HMAC request signatures", "Multi-tenant organizations and projects"],
-      provider: { "@id": `${SITE_URL}/#organization` }, offers: { "@type": "Offer", price: "0", priceCurrency: "INR", description: "Free public beta" }
+      provider: { "@id": `${SITE_URL}/#organization` }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free public beta" }
     }
   ]
 };
@@ -25,7 +25,7 @@ const structuredData = {
 export default function Home() {
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} /><main className="marketing-v2">
     <MarketingMotion /><PublicHeader /><MarketingHero />
-    <section className="proof-rail" aria-label="Supported webhook ecosystems"><span><Radio size={13} /> BUILT FIRST FOR</span><div><strong>INDIAN SAAS</strong><strong>RAZORPAY</strong><strong>CASHFREE</strong><strong>STRIPE</strong><strong>SHOPIFY</strong><strong>CUSTOM EVENTS</strong></div></section>
+    <section className="proof-rail" aria-label="Supported webhook ecosystems"><span><Radio size={13} /> BUILT FOR</span><div><strong>SAAS PLATFORMS</strong><strong>PAYMENT APIS</strong><strong>COMMERCE</strong><strong>INTERNAL SYSTEMS</strong><strong>CUSTOM EVENTS</strong></div></section>
     <ProblemSection /><PlatformSection /><UseCasesSection /><SecuritySection /><DeveloperSection /><FinalCta /><PublicFooter />
   </main></>;
 }

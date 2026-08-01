@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, Building2, Check, Code2, Database, Fingerprint, KeyRound, LockKeyhole, Network, ReceiptIndianRupee, ShieldCheck, TerminalSquare, Users, Workflow } from "lucide-react";
+import { ArrowRight, Building2, Check, Code2, Database, Fingerprint, KeyRound, LockKeyhole, Network, CircleDollarSign, ShieldCheck, TerminalSquare, Users, Workflow } from "lucide-react";
 
 export function UseCasesSection() {
   return <section className="use-cases" id="use-cases">
     <div className="use-cases-head" data-reveal><span className="section-label">Where PayloadGrid fits</span><h2>Built for products that move events between companies.</h2><p>Use the same delivery layer whether your product publishes events to customers, depends on third-party callbacks, or needs both directions at once.</p></div>
     <div className="use-case-list">
       <article data-reveal><span className="case-number">01</span><i><Building2 size={22} /></i><div><h3>SaaS and API platforms</h3><p>Give every customer isolated applications, destinations, subscriptions, signing secrets, and delivery records.</p></div><ul><li>Customer event fan-out</li><li>Endpoint-level subscriptions</li><li>Tenant-safe operations</li></ul></article>
-      <article data-reveal><span className="case-number">02</span><i><ReceiptIndianRupee size={22} /></i><div><h3>Payments and commerce</h3><p>Receive payment and order callbacks through stable routes, then see failures before they become support issues.</p></div><ul><li>Razorpay, Cashfree, Stripe</li><li>Shopify event forwarding</li><li>Revenue-at-risk tracking</li></ul></article>
+      <article data-reveal><span className="case-number">02</span><i><CircleDollarSign size={22} /></i><div><h3>Payments and commerce</h3><p>Receive payment and order callbacks through stable routes, then see failures before they become support issues.</p></div><ul><li>Stripe, Shopify, Razorpay, Cashfree</li><li>Payment and commerce event forwarding</li><li>Revenue-at-risk tracking</li></ul></article>
       <article data-reveal><span className="case-number">03</span><i><Workflow size={22} /></i><div><h3>Internal platform teams</h3><p>Replace duplicated retry code and delivery logs across services with one shared operational system.</p></div><ul><li>Central event catalog</li><li>Unified audit history</li><li>Reusable delivery policy</li></ul></article>
     </div>
   </section>;

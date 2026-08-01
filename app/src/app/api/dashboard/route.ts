@@ -7,7 +7,7 @@ import { queueConfigured } from "@/lib/queue";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type MetricRow = { total_events: string; terminal_events: string; queued_events: string; processing_events: string; failed_events: string; retrying_events: string; delivered_events: string; revenue_at_risk: string; avg_latency: string | null };
+type MetricRow = { total_events: string; terminal_events: string; queued_events: string; processing_events: string; failed_events: string; retrying_events: string; delivered_events: string; revenue_at_risk: Array<{ currency: string; amount: number | string }>; avg_latency: string | null };
 
 export async function GET() {
   try {
@@ -22,7 +22,7 @@ export async function GET() {
       `,
       sql`
         select e.id, e.endpoint_id, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
-          e.event_type, e.status, e.revenue_at_risk, e.received_at, e.updated_at, e.request_headers, e.request_body,
+          e.event_type, e.status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
           e.retry_count, e.max_retries, e.next_retry_at, e.last_error,
           coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
         from webhook_events e
@@ -49,7 +49,16 @@ export async function GET() {
           count(*) filter (where status = 'failed')::text as failed_events,
           count(*) filter (where status = 'retrying')::text as retrying_events,
           count(*) filter (where status = 'delivered')::text as delivered_events,
-          coalesce(sum(revenue_at_risk) filter (where status <> 'delivered'), 0)::text as revenue_at_risk,
+          coalesce((
+            select jsonb_agg(jsonb_build_object('currency', risk.currency, 'amount', risk.amount) order by risk.amount desc)
+            from (
+              select risky.revenue_currency as currency, sum(risky.revenue_at_risk) as amount
+              from webhook_events risky
+              where risky.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
+                and risky.status <> 'delivered' and risky.revenue_currency is not null and risky.revenue_at_risk > 0
+              group by risky.revenue_currency
+            ) risk
+          ), '[]'::jsonb) as revenue_at_risk,
           coalesce(avg(latest.latency_ms), 0)::text as avg_latency
         from webhook_events e
         left join lateral (select latency_ms from delivery_attempts where event_id = e.id order by created_at desc limit 1) latest on true
@@ -64,7 +73,7 @@ export async function GET() {
         totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0), queuedEvents: Number(metric?.queued_events || 0), processingEvents: Number(metric?.processing_events || 0),
         openIncidents: Number(metric?.failed_events || 0) + Number(metric?.retrying_events || 0),
         successRate: terminal ? Math.round((delivered / terminal) * 1000) / 10 : 100,
-        avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: Number(metric?.revenue_at_risk || 0), endpoints: endpoints.length
+        avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: metric?.revenue_at_risk || [], endpoints: endpoints.length
       }
     });
   } catch (error) {

@@ -4,7 +4,7 @@ import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const title = "Webhook Infrastructure for Reliable Delivery | PayloadGrid";
-const description = "PayloadGrid is webhook infrastructure for Indian SaaS and payment teams. Verify Razorpay, Cashfree, Stripe, and Shopify callbacks, then retry, replay, and monitor delivery.";
+const description = "PayloadGrid is global webhook infrastructure for SaaS and developer teams. Send, receive, verify, retry, replay, and monitor webhook delivery.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description,
   applicationName: "PayloadGrid",
   alternates: { canonical: "/" },
-  keywords: ["webhook infrastructure", "webhook delivery", "webhook retries", "webhook gateway", "webhook monitoring", "webhook replay", "outbound webhooks", "inbound webhooks", "Razorpay webhook", "Cashfree webhook", "India webhook infrastructure"],
+  keywords: ["webhook infrastructure", "webhook delivery", "webhook retries", "webhook gateway", "webhook monitoring", "webhook replay", "outbound webhooks", "inbound webhooks", "webhook API", "webhook service", "payment webhooks", "commerce webhooks"],
   authors: [{ name: "PayloadGrid", url: "/" }],
   creator: "PayloadGrid",
   publisher: "PayloadGrid",

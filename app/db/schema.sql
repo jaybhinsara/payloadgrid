@@ -136,8 +136,9 @@ create table if not exists webhook_events (
   request_headers jsonb not null default '{}'::jsonb,
   request_body jsonb not null default '{}'::jsonb,
   status text not null default 'queued' check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying')),
-  revenue_amount integer not null default 0,
-  revenue_at_risk integer not null default 0,
+  revenue_amount numeric(18,4) not null default 0,
+  revenue_currency text,
+  revenue_at_risk numeric(18,4) not null default 0,
   retry_count integer not null default 0,
   max_retries integer not null default 4,
   next_retry_at timestamptz,
@@ -149,7 +150,11 @@ create table if not exists webhook_events (
 alter table webhook_events add column if not exists application_id uuid references applications(id) on delete cascade;
 alter table webhook_events add column if not exists message_id uuid references messages(id) on delete cascade;
 alter table webhook_events add column if not exists direction text not null default 'inbound';
-alter table webhook_events add column if not exists revenue_amount integer not null default 0;
+alter table webhook_events add column if not exists revenue_amount numeric(18,4) not null default 0;
+alter table webhook_events add column if not exists revenue_currency text;
+alter table webhook_events alter column revenue_amount type numeric(18,4) using revenue_amount::numeric;
+alter table webhook_events alter column revenue_at_risk type numeric(18,4) using revenue_at_risk::numeric;
+update webhook_events set revenue_currency = 'INR' where revenue_currency is null and revenue_amount > 0;
 alter table webhook_events add column if not exists retry_count integer not null default 0;
 alter table webhook_events add column if not exists max_retries integer not null default 4;
 alter table webhook_events add column if not exists next_retry_at timestamptz;

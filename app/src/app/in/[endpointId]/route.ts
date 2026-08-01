@@ -35,11 +35,11 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     catch { return NextResponse.json({ ok: false, error: "Webhook body must be valid JSON" }, { status: 400 }); }
     const eventType = eventTypeFromPayload(payload, provider, request.headers);
     const providerEventId = providerEventIdFromPayload(payload, provider, request.headers);
-    const revenueAmount = amountFromPayload(payload, provider);
+    const revenue = amountFromPayload(payload, provider);
     const headers = safeCapturedHeaders(request.headers);
     const [event] = await sql`
-      insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type, request_headers, request_body, status, revenue_amount, max_retries)
-      values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType}, ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, 'queued', ${revenueAmount}, 6)
+      insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type, request_headers, request_body, status, revenue_amount, revenue_currency, max_retries)
+      values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType}, ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, 'queued', ${revenue.amount}, ${revenue.currency}, 6)
       on conflict (endpoint_id, provider_event_id) where provider_event_id is not null do nothing
       returning id
     `;

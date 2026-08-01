@@ -58,28 +58,41 @@ function normalizedCurrency(payload: unknown, provider: Provider) {
         ? [["data", "payment", "payment_currency"], ["data", "order", "order_currency"]]
         : provider === "shopify"
           ? [["currency"], ["presentment_currency"]]
-          : [];
+          : [["currency"], ["data", "currency"]];
   for (const path of paths) {
     const value = readNestedValue(payload, path);
-    if (typeof value === "string" && value) return value.toUpperCase();
+    if (typeof value === "string" && /^[a-z]{3}$/i.test(value)) return value.toUpperCase();
   }
   return null;
 }
 
+function minorToMajor(amount: number, currency: string) {
+  try {
+    const digits = new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits;
+    return amount / (10 ** (digits ?? 2));
+  } catch {
+    return 0;
+  }
+}
+
 export function amountFromPayload(payload: unknown, provider: Provider) {
-  if (provider === "custom" || normalizedCurrency(payload, provider) !== "INR") return 0;
+  const currency = normalizedCurrency(payload, provider);
+  if (!currency) return { amount: 0, currency: null };
   if (provider === "razorpay") {
     const minor = numericValue(payload, [["payload", "payment", "entity", "amount"], ["payload", "order", "entity", "amount"]]);
-    return Math.round(minor / 100);
+    return { amount: minorToMajor(minor, currency), currency };
   }
   if (provider === "stripe") {
     const minor = numericValue(payload, [["data", "object", "amount"], ["data", "object", "amount_received"], ["data", "object", "amount_paid"]]);
-    return Math.round(minor / 100);
+    return { amount: minorToMajor(minor, currency), currency };
   }
   if (provider === "cashfree") {
-    return Math.round(numericValue(payload, [["data", "payment", "payment_amount"], ["data", "order", "order_amount"]]));
+    return { amount: numericValue(payload, [["data", "payment", "payment_amount"], ["data", "order", "order_amount"]]), currency };
   }
-  return Math.round(numericValue(payload, [["current_total_price"], ["total_price"]]));
+  if (provider === "shopify") {
+    return { amount: numericValue(payload, [["current_total_price"], ["total_price"]]), currency };
+  }
+  return { amount: numericValue(payload, [["amount"], ["value"], ["data", "amount"]]), currency };
 }
 export function safeCapturedHeaders(headers: Headers) {
   const result: Record<string, string> = {};
