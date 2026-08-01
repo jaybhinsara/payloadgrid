@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authErrorResponse, requireSession } from "@/lib/auth";
 import { appUrl, providers } from "@/lib/constants";
 import { requireSql } from "@/lib/db";
+import { BETA_LIMITS } from "@/lib/limits";
 import { queueConfigured } from "@/lib/queue";
 
 export const runtime = "nodejs";
@@ -13,25 +14,26 @@ export async function GET() {
   try {
     const context = await requireSession();
     const sql = requireSql();
-    const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, metricRows] = await Promise.all([
+    const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, metricRows, usageRows] = await Promise.all([
       sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
       sql`
         select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active, ep.created_at,
           coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
-        from endpoints ep where ep.project_id = ${context.project.id} order by ep.created_at desc
+        from endpoints ep where ep.project_id = ${context.project.id} and ep.deleted_at is null order by ep.created_at desc
       `,
       sql`
-        select e.id, e.endpoint_id, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
+        select e.id, e.endpoint_id, ep.name as endpoint_name, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
           e.event_type, e.status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
           e.retry_count, e.max_retries, e.next_retry_at, e.last_error,
           coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
         from webhook_events e
+        join endpoints ep on ep.id = e.endpoint_id
         left join lateral (
           select latest.response_status, latest.response_body, latest.latency_ms, latest.error,
             (select count(*)::int from delivery_attempts counted where counted.event_id = e.id) as attempt_count
           from delivery_attempts latest where latest.event_id = e.id order by latest.created_at desc limit 1
         ) a on true
-        where e.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
+        where ep.project_id = ${context.project.id}
         order by e.received_at desc limit 100
       `,
       sql`select id, application_id, event_type, status, created_at from messages where project_id = ${context.project.id} order by created_at desc limit 50`,
@@ -63,12 +65,17 @@ export async function GET() {
         from webhook_events e
         left join lateral (select latency_ms from delivery_attempts where event_id = e.id order by created_at desc limit 1) latest on true
         where e.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
+      `,
+      sql`
+        select date_trunc('month', now()) as period_start,
+          ((select count(*) from messages where project_id = ${context.project.id} and created_at >= date_trunc('month', now())) +
+           (select count(*) from webhook_events e join endpoints ep on ep.id = e.endpoint_id where ep.project_id = ${context.project.id} and e.direction = 'inbound' and e.received_at >= date_trunc('month', now())))::int as accepted_events
       `
     ]);
     const metric = metricRows[0] as MetricRow | undefined;
     const total = Number(metric?.total_events || 0); const terminal = Number(metric?.terminal_events || 0); const delivered = Number(metric?.delivered_events || 0);
     return NextResponse.json({
-      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, system: { queueConfigured: queueConfigured() },
+      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, system: { queueConfigured: queueConfigured() }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: BETA_LIMITS },
       metrics: {
         totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0), queuedEvents: Number(metric?.queued_events || 0), processingEvents: Number(metric?.processing_events || 0),
         openIncidents: Number(metric?.failed_events || 0) + Number(metric?.retrying_events || 0),

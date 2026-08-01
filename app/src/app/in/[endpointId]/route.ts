@@ -22,7 +22,7 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const [endpoint] = await sql`
       select id, project_id, application_id, provider, destination_url, is_active, provider_secret_encrypted,
         provider_verification_required, rate_limit_per_minute
-      from endpoints where id = ${endpointId} limit 1
+      from endpoints where id = ${endpointId} and deleted_at is null limit 1
     `;
     if (!endpoint?.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive PayloadGrid endpoint" }, { status: 404 });
     await enforceInboundRateLimit(String(endpoint.id));

@@ -95,6 +95,7 @@ create table if not exists endpoints (
   description text,
   rate_limit_per_minute integer not null default 120,
   is_active boolean not null default true,
+  deleted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -103,6 +104,7 @@ alter table endpoints add column if not exists application_id uuid references ap
 alter table endpoints add column if not exists signing_secret text;
 alter table endpoints add column if not exists description text;
 alter table endpoints add column if not exists rate_limit_per_minute integer not null default 120;
+alter table endpoints add column if not exists deleted_at timestamptz;
 
 create table if not exists endpoint_subscriptions (
   endpoint_id uuid not null references endpoints(id) on delete cascade,

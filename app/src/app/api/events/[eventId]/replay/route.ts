@@ -16,7 +16,7 @@ export async function POST(_request: Request, contextValue: { params: Promise<{ 
     const [event] = await sql`
       select e.id, e.endpoint_id, e.max_retries, ep.rate_limit_per_minute
       from webhook_events e join endpoints ep on ep.id = e.endpoint_id
-      where e.id = ${eventId} and ep.project_id = ${context.project.id} limit 1
+      where e.id = ${eventId} and ep.project_id = ${context.project.id} and ep.deleted_at is null limit 1
     `;
     if (!event) return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
     const [attemptCount] = await sql`select count(*)::int as count from delivery_attempts where event_id = ${event.id}`;

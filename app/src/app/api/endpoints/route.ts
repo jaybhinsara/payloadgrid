@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     if (body.provider !== "custom" && !body.providerSecret) return NextResponse.json({ ok: false, error: `${body.provider} verification secret is required` }, { status: 400 });
     const destinationUrl = await assertSafeDestinationUrl(body.destinationUrl);
     const sql = requireSql();
-    const [count] = await sql`select count(*)::int as count from endpoints where project_id = ${context.project.id}`;
+    const [count] = await sql`select count(*)::int as count from endpoints where project_id = ${context.project.id} and deleted_at is null`;
     if (Number(count.count) >= BETA_LIMITS.endpoints) throw new UsageLimitError(`Public beta supports up to ${BETA_LIMITS.endpoints} endpoints per project`);
     const [application] = await sql`select id from applications where id = ${body.applicationId} and project_id = ${context.project.id} limit 1`;
     if (!application) return NextResponse.json({ ok: false, error: "Application not found" }, { status: 404 });
