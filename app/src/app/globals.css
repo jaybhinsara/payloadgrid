@@ -630,3 +630,44 @@ p { color: var(--muted); line-height: 1.6; }
 }
 .onboarding-warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #f2d7a9; border-radius: 7px; background: var(--amber-bg); padding: 11px 13px; color: var(--amber); font-size: 11px; font-weight: 700; }
 .onboarding-warning button { background: transparent; color: inherit; font-size: 11px; font-weight: 800; text-decoration: underline; }
+
+/* Production delivery operations */
+.status-pill.dead_letter { background: #252a31; color: #f2f4f1; }
+.status-pill.cancelled { background: #eef0ed; color: #697178; }
+.bulk-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; margin-bottom: 12px; border: 1px solid #b8cce9; border-radius: 7px; background: var(--blue-bg); padding: 10px 12px; }
+.bulk-toolbar strong { color: #244d91; font-size: 12px; }
+.bulk-toolbar > span { color: #5f7190; font-size: 10px; }
+.delivery-list.loading { opacity: .62; }
+.delivery-table.operations-table { min-width: 1180px; }
+.delivery-table.operations-table .table-header, .delivery-table.operations-table .table-row { grid-template-columns: 28px 1.2fr .6fr 1fr .85fr .9fr .5fr .58fr 70px; }
+.operations-table input[type="checkbox"] { width: 15px; min-height: 15px; margin: 0; accent-color: var(--coral); }
+.attempt-section { margin: 22px 23px 5px; border-top: 1px solid var(--line); padding-top: 20px; }
+.attempt-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
+.attempt-heading h3 { margin: 5px 0 0; font-size: 14px; }
+.attempt-empty { border: 1px dashed var(--line); border-radius: 7px; padding: 20px; font-size: 11px; text-align: center; }
+.attempt-timeline { display: grid; }
+.attempt-timeline > article { position: relative; display: grid; grid-template-columns: 31px minmax(0, 1fr); gap: 12px; padding-bottom: 18px; }
+.attempt-timeline > article::before { position: absolute; top: 30px; bottom: 0; left: 14px; border-left: 1px solid var(--line); content: ""; }
+.attempt-timeline > article:last-child::before { display: none; }
+.attempt-timeline > article > span { z-index: 1; display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid #efb9b0; border-radius: 50%; background: var(--red-bg); color: var(--red); font-size: 10px; font-weight: 850; }
+.attempt-timeline > article.delivered > span { border-color: #a8d9bf; background: var(--green-bg); color: var(--green); }
+.attempt-timeline > article > div { min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 13px; }
+.attempt-timeline header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.attempt-timeline header strong { font-size: 11px; }
+.attempt-timeline header time { color: var(--muted); font-size: 9px; }
+.attempt-timeline code { display: block; margin: 7px 0; overflow: hidden; color: #5f6870; font-family: var(--mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.attempt-meta { display: flex; gap: 7px; }
+.attempt-meta span { border-radius: 999px; background: var(--surface-2); padding: 4px 7px; color: #657078; font-size: 9px; }
+.attempt-timeline p { margin: 8px 0 0; color: var(--red); font-size: 10px; line-height: 1.5; }
+.attempt-timeline details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 9px; }
+.attempt-timeline summary { cursor: pointer; color: #626b72; font-size: 10px; font-weight: 700; }
+.attempt-timeline pre { max-height: 190px; overflow: auto; margin: 9px 0 0; border-radius: 6px; background: #171a20; padding: 12px; color: #d7e2db; font-family: var(--mono); font-size: 9px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.drawer-error { margin: 15px 23px 0; border: 1px solid #f1cbc5; border-radius: 6px; }
+.event-drawer > footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 760px) {
+  .bulk-toolbar { grid-template-columns: 1fr 1fr; }
+  .bulk-toolbar > span { grid-column: 1 / -1; grid-row: 2; }
+  .attempt-timeline header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .event-drawer > footer { align-items: stretch; flex-direction: column; }
+}

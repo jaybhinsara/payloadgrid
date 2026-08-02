@@ -1,3 +1,4 @@
+import { safeCapturedHeaders } from "@/lib/constants";
 import { createWebhookSignature } from "@/lib/security";
 import { assertSafeDestinationUrl } from "@/lib/destination-security";
 
@@ -47,7 +48,7 @@ export async function deliverWebhook(
       ok: response.ok,
       status: response.status,
       body: (await response.text().catch(() => "")).slice(0, 4000),
-      responseHeaders: Object.fromEntries(response.headers.entries()),
+      responseHeaders: safeCapturedHeaders(response.headers),
       error: null,
       latencyMs: Date.now() - started
     };

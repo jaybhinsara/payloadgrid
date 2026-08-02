@@ -7,6 +7,7 @@ export type QueueDeliveryInput = {
   attempt: number;
   delaySeconds?: number;
   rateLimitPerMinute?: number;
+  deduplicationId?: string;
 };
 
 export function queueConfigured() {
@@ -27,7 +28,7 @@ export async function enqueueDelivery(input: QueueDeliveryInput) {
     url: `${appUrl()}/api/jobs/deliver`,
     body: { eventId: input.eventId },
     delay: input.delaySeconds || 0,
-    deduplicationId: `${input.eventId}-attempt-${input.attempt}`,
+    deduplicationId: input.deduplicationId || `${input.eventId}-attempt-${input.attempt}`,
     retries: 3,
     retryDelay: "max(1000, pow(2, retried) * 1000)",
     timeout: "30s",

@@ -24,7 +24,7 @@ export async function GET() {
       sql`
         select e.id, e.endpoint_id, ep.name as endpoint_name, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
           e.event_type, e.status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
-          e.retry_count, e.max_retries, e.next_retry_at, e.last_error,
+          e.retry_count, e.max_retries, e.next_retry_at, e.last_error, e.cancelled_at, e.dead_lettered_at,
           coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
         from webhook_events e
         join endpoints ep on ep.id = e.endpoint_id
@@ -45,10 +45,10 @@ export async function GET() {
       sql`select id, action, resource_type, resource_id, metadata, created_at from audit_logs where organization_id = ${context.organization.id} order by created_at desc limit 30`,
       sql`
         select count(*)::text as total_events,
-          count(*) filter (where status in ('delivered','failed'))::text as terminal_events,
+          count(*) filter (where status in ('delivered','failed','dead_letter'))::text as terminal_events,
           count(*) filter (where status = 'queued')::text as queued_events,
           count(*) filter (where status = 'processing')::text as processing_events,
-          count(*) filter (where status = 'failed')::text as failed_events,
+          count(*) filter (where status in ('failed','dead_letter'))::text as failed_events,
           count(*) filter (where status = 'retrying')::text as retrying_events,
           count(*) filter (where status = 'delivered')::text as delivered_events,
           coalesce((

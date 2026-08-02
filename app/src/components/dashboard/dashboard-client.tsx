@@ -2,11 +2,11 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AlertTriangle, AppWindow, BarChart3, CircleCheck, BookOpen, Braces, ChevronDown, Copy, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, Settings2, Users, X } from "lucide-react";
+import { Activity, AlertTriangle, AppWindow, ArchiveX, Ban, BarChart3, CircleCheck, BookOpen, Braces, ChevronDown, Copy, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, Settings2, Users, X } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Status } from "@/components/dashboard/common";
 import { OnboardingWizard } from "@/components/dashboard/onboarding";
-import type { DashboardData, EventRow, View } from "@/components/dashboard/types";
+import type { DashboardData, DeliveryAttempt, EventRow, View } from "@/components/dashboard/types";
 import { OverviewView } from "@/components/dashboard/views/overview";
 import { ApplicationsView, EndpointsView } from "@/components/dashboard/views/routing";
 import { DeliveriesView, EventTypesView, MessagesView } from "@/components/dashboard/views/activity";
@@ -42,10 +42,11 @@ export function DashboardClient() {
   }
   async function replayDelivery(id: string) {
     const payload = await mutate(`/api/events/${id}/replay`);
-    if (!payload) return;
+    if (!payload) return null;
     const queueError = typeof payload.queueError === "string" ? payload.queueError : "";
     setNotice(payload.scheduled === true ? "Replay accepted by the durable queue." : `Replay used the Vercel fallback because QStash did not accept the job.${queueError ? ` ${queueError}` : ""}`);
     window.setTimeout(() => setNotice(""), 8000);
+    return payload;
   }
   async function submit(event: FormEvent<HTMLFormElement>, path: string, build: (form: FormData) => unknown, after?: (payload: Record<string, unknown>) => void) { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); try { const payload = await mutate(path, build(form)); if (payload) { after?.(payload); formElement.reset(); } } catch (cause) { setError(cause instanceof Error ? cause.message : "Invalid form data"); } }
   async function copy(value: string) { await navigator.clipboard.writeText(value); setBusy("copied"); window.setTimeout(() => setBusy(""), 1000); }
@@ -76,20 +77,57 @@ export function DashboardClient() {
       {view === "applications" ? <ApplicationsView data={data} busy={busy} submit={submit} /> : null}
       {view === "endpoints" ? <EndpointsView data={data} busy={busy} submit={submit} copy={copy} mutate={mutate} /> : null}
       {view === "messages" ? <MessagesView data={data} busy={busy} submit={submit} /> : null}
-      {view === "deliveries" ? <DeliveriesView events={data.events} endpoints={data.endpoints} inspect={setSelectedEvent} replay={(id) => { void replayDelivery(id); }} endpointName={endpointName} /> : null}
+      {view === "deliveries" ? <DeliveriesView initialEvents={data.events} endpoints={data.endpoints} inspect={setSelectedEvent} replay={replayDelivery} mutate={mutate} refreshVersion={lastRefresh?.getTime() || 0} /> : null}
       {view === "event-types" ? <EventTypesView data={data} busy={busy} submit={submit} /> : null}
       {view === "api-keys" ? <ApiKeysView data={data} busy={busy} submit={submit} revoke={(id) => { void mutate(`/api/api-keys/${id}`, undefined, "DELETE"); }} reveal={setNewToken} /> : null}
       {view === "team" ? <TeamView data={data} busy={busy} submit={submit} reveal={setInviteToken} /> : null}
       {view === "usage" ? <UsageView data={data} /> : null}
       {view === "settings" ? <AutomationsView data={data} busy={busy} submit={submit} /> : null}
     </div></section>
-    {selectedEvent ? <EventDrawer event={selectedEvent} endpointName={endpointName} close={() => setSelectedEvent(null)} copy={copy} replay={(id) => { void replayDelivery(id); }} /> : null}
+    {selectedEvent ? <EventDrawer event={selectedEvent} endpointName={endpointName} close={() => setSelectedEvent(null)} copy={copy} replay={replayDelivery} mutate={mutate} /> : null}
     {newToken ? <SecretModal title="API key created" copy="This key is shown once. Store it securely before closing." secret={newToken} close={() => setNewToken("")} copyValue={copy} /> : null}
     {inviteToken ? <SecretModal title="Invitation link created" copy="Share this one-time signup link securely with the invited teammate." secret={inviteToken} close={() => setInviteToken("")} copyValue={copy} /> : null}
     {onboardingOpen ? <OnboardingWizard data={data} mutate={mutate} close={closeOnboarding} goTo={setView} /> : null}
   </main>;
 }
 
-function EventDrawer({ event, endpointName, close, copy, replay }: { event: EventRow; endpointName: (id: string) => string; close: () => void; copy: (value: string) => void; replay: (id: string) => void }) { return <div className="drawer-backdrop" onMouseDown={close}><aside className="event-drawer" onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}><header><div><span className="section-label">Delivery inspection</span><h2>{event.event_type}</h2><p>{event.id}</p></div><button className="icon-button" onClick={close}><X size={19} /></button></header><div className="drawer-summary"><div><span>Status</span><Status value={event.status} /></div><div><span>Endpoint</span><strong>{endpointName(event.endpoint_id)}</strong></div><div><span>Response</span><strong>{event.response_status ? `HTTP ${event.response_status}` : "No response"}</strong></div><div><span>Latency</span><strong>{event.latency_ms || 0}ms</strong></div><div><span>Attempts</span><strong>{event.attempt_count}/{event.max_retries}</strong></div><div><span>Direction</span><strong>{event.direction}</strong></div></div>{event.next_retry_at ? <div className="retry-notice"><RefreshCw size={16} /> Next retry {new Date(event.next_retry_at).toLocaleString()}</div> : null}<DrawerCode title="Payload" value={JSON.stringify(event.request_body, null, 2)} copy={copy} /><DrawerCode title="Request headers" value={JSON.stringify(event.request_headers, null, 2)} copy={copy} /><DrawerCode title="Latest response" value={event.response_body || event.error || event.last_error || "No response body captured."} copy={copy} /><footer><button className="button secondary" onClick={() => replay(event.id)}><RotateCcw size={16} /> Replay delivery</button></footer></aside></div>; }
+function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { event: EventRow; endpointName: (id: string) => string; close: () => void; copy: (value: string) => void; replay: (id: string) => Promise<Record<string, unknown> | null>; mutate: (path: string, body?: unknown, method?: string) => Promise<Record<string, unknown> | null> }) {
+  const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionBusy, setActionBusy] = useState("");
+  const [detailError, setDetailError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true); setDetailError("");
+    fetch(`/api/events/${event.id}/attempts`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || "Could not load attempts"); return payload; })
+      .then((payload) => setAttempts(payload.attempts || []))
+      .catch((cause) => { if (cause instanceof Error && cause.name !== "AbortError") setDetailError(cause.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [event.id]);
+  async function run(kind: "replay" | "cancel" | "dead-letter") {
+    setActionBusy(kind);
+    const payload = kind === "replay" ? await replay(event.id) : await mutate(`/api/events/${event.id}/${kind}`);
+    setActionBusy("");
+    if (payload) close();
+  }
+  const pending = ["queued", "received", "retrying"].includes(event.status);
+  const replayable = ["delivered", "failed", "dead_letter", "cancelled"].includes(event.status);
+  return <div className="drawer-backdrop" onMouseDown={close}><aside className="event-drawer" onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}><header><div><span className="section-label">Delivery inspection</span><h2>{event.event_type}</h2><p>{event.id}</p></div><button className="icon-button" onClick={close} aria-label="Close delivery"><X size={19} /></button></header>
+    <div className="drawer-summary"><div><span>Status</span><Status value={event.status} /></div><div><span>Endpoint</span><strong>{event.endpoint_name || endpointName(event.endpoint_id)}</strong></div><div><span>Response</span><strong>{event.response_status ? `HTTP ${event.response_status}` : "No response"}</strong></div><div><span>Latency</span><strong>{event.latency_ms || 0}ms</strong></div><div><span>Attempts</span><strong>{event.attempt_count}/{event.max_retries}</strong></div><div><span>Direction</span><strong>{event.direction}</strong></div></div>
+    {event.next_retry_at ? <div className="retry-notice"><RefreshCw size={16} /> Next retry {new Date(event.next_retry_at).toLocaleString()}</div> : null}
+    {detailError ? <div className="inline-error drawer-error">{detailError}</div> : null}
+    <section className="attempt-section"><div className="attempt-heading"><div><span className="section-label">Attempt history</span><h3>{attempts.length} delivery attempts</h3></div>{loading ? <LoaderCircle className="spin" size={17} /> : null}</div>{attempts.length ? <div className="attempt-timeline">{attempts.map((attempt) => <AttemptRow key={attempt.id} attempt={attempt} />)}</div> : !loading ? <p className="attempt-empty">No destination attempt has run yet.</p> : null}</section>
+    <DrawerCode title="Original payload" value={JSON.stringify(event.request_body, null, 2)} copy={copy} />
+    <DrawerCode title="Original request headers" value={JSON.stringify(event.request_headers, null, 2)} copy={copy} />
+    <footer>{pending ? <button className="button danger" disabled={Boolean(actionBusy)} onClick={() => void run("cancel")}><Ban size={16} /> Cancel retry</button> : null}{event.status === "failed" ? <button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => void run("dead-letter")}><ArchiveX size={16} /> Move to dead letter</button> : null}{replayable ? <button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void run("replay")}><RotateCcw size={16} /> Replay delivery</button> : null}</footer>
+  </aside></div>;
+}
+
+function AttemptRow({ attempt }: { attempt: DeliveryAttempt }) {
+  const delivered = Boolean(attempt.response_status && attempt.response_status >= 200 && attempt.response_status < 300);
+  return <article className={delivered ? "delivered" : "failed"}><span>{attempt.attempt_number}</span><div><header><strong>{delivered ? "Delivered" : attempt.error ? "Connection failed" : `HTTP ${attempt.response_status || "error"}`}</strong><time>{new Date(attempt.created_at).toLocaleString()}</time></header><code>{attempt.destination_url}</code><div className="attempt-meta"><span>{attempt.latency_ms}ms</span><span>{attempt.response_status ? `HTTP ${attempt.response_status}` : "No response"}</span></div>{attempt.error ? <p>{attempt.error}</p> : null}<details><summary>Request and response evidence</summary><pre>{JSON.stringify({ requestHeaders: attempt.request_headers, responseHeaders: attempt.response_headers, responseBody: attempt.response_body }, null, 2)}</pre></details></div></article>;
+}
 function DrawerCode({ title, value, copy }: { title: string; value: string; copy: (value: string) => void }) { return <section className="drawer-code"><div><strong>{title}</strong><button className="icon-button" onClick={() => copy(value)} title={`Copy ${title}`}><Copy size={14} /></button></div><pre>{value}</pre></section>; }
 function SecretModal({ title, copy: message, secret, close, copyValue }: { title: string; copy: string; secret: string; close: () => void; copyValue: (value: string) => void }) { return <div className="modal-backdrop"><section className="secret-modal"><span className="secret-icon"><KeyRound size={22} /></span><h2>{title}</h2><p>{message}</p><div><code>{secret}</code><button className="icon-button" onClick={() => copyValue(secret)}><Copy size={16} /></button></div><button className="button primary wide" onClick={close}>I stored it securely</button></section></div>; }

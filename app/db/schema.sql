@@ -137,7 +137,7 @@ create table if not exists webhook_events (
   event_type text not null,
   request_headers jsonb not null default '{}'::jsonb,
   request_body jsonb not null default '{}'::jsonb,
-  status text not null default 'queued' check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying')),
+  status text not null default 'queued' check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying', 'cancelled', 'dead_letter')),
   revenue_amount numeric(18,4) not null default 0,
   revenue_currency text,
   revenue_at_risk numeric(18,4) not null default 0,
@@ -164,9 +164,11 @@ alter table webhook_events add column if not exists last_error text;
 alter table webhook_events add column if not exists locked_at timestamptz;
 alter table webhook_events add column if not exists payload_expires_at timestamptz not null default (now() + interval '3 days');
 alter table webhook_events add column if not exists payload_redacted_at timestamptz;
+alter table webhook_events add column if not exists cancelled_at timestamptz;
+alter table webhook_events add column if not exists dead_lettered_at timestamptz;
 alter table webhook_events alter column status set default 'queued';
 alter table webhook_events drop constraint if exists webhook_events_status_check;
-alter table webhook_events add constraint webhook_events_status_check check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying'));
+alter table webhook_events add constraint webhook_events_status_check check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying', 'cancelled', 'dead_letter'));
 
 create table if not exists delivery_attempts (
   id uuid primary key default gen_random_uuid(),
@@ -284,6 +286,8 @@ create index if not exists webhook_events_application_id_received_at_idx on webh
 create index if not exists webhook_events_message_id_idx on webhook_events(message_id);
 create index if not exists webhook_events_status_received_at_idx on webhook_events(status, received_at desc);
 create index if not exists webhook_events_next_retry_at_idx on webhook_events(next_retry_at) where status = 'retrying';
+create index if not exists webhook_events_dead_letter_idx on webhook_events(received_at desc, id desc) where status = 'dead_letter';
+create index if not exists webhook_events_cursor_idx on webhook_events(received_at desc, id desc);
 create index if not exists webhook_events_queue_idx on webhook_events(status, received_at) where status in ('queued', 'processing', 'retrying');
 with duplicate_provider_events as (
   select id, row_number() over (partition by endpoint_id, provider_event_id order by received_at asc, id asc) as duplicate_rank

@@ -3,12 +3,12 @@ import { requireSql } from "@/lib/db";
 import { deliverWebhook, nextRetryDelayMinutes, shouldRetry } from "@/lib/delivery";
 import { enqueueDelivery } from "@/lib/queue";
 
-async function updateMessageStatus(messageId: string) {
+export async function updateMessageStatus(messageId: string) {
   const sql = requireSql();
   const [summary] = await sql`
     select count(*)::int as total,
       count(*) filter (where status = 'delivered')::int as delivered,
-      count(*) filter (where status = 'failed')::int as failed,
+      count(*) filter (where status in ('failed','dead_letter','cancelled'))::int as failed,
       count(*) filter (where status in ('queued','processing','received','retrying'))::int as active
     from webhook_events where message_id = ${messageId}
   `;
@@ -33,9 +33,9 @@ export async function processDelivery(eventId: string) {
     from endpoints where id = ${claimed.endpoint_id} limit 1
   `;
   if (!endpoint?.is_active) {
-    await sql`update webhook_events set status = 'failed', locked_at = null, last_error = 'Endpoint is inactive', updated_at = now() where id = ${claimed.id}`;
+    await sql`update webhook_events set status = 'dead_letter', locked_at = null, next_retry_at = null, dead_lettered_at = now(), last_error = 'Endpoint is inactive', updated_at = now() where id = ${claimed.id}`;
     if (claimed.message_id) await updateMessageStatus(String(claimed.message_id));
-    return { processed: true, status: "failed" };
+    return { processed: true, status: "dead_letter" };
   }
   const [attemptRow] = await sql`select count(*)::int as count from delivery_attempts where event_id = ${claimed.id}`;
   const attempt = Number(attemptRow.count || 0) + 1;
@@ -47,7 +47,7 @@ export async function processDelivery(eventId: string) {
     endpoint.signing_secret ? { secret: String(endpoint.signing_secret), deliveryId: String(claimed.id) } : undefined
   );
   const willRetry = !delivery.ok && shouldRetry(attempt, maxRetries);
-  const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "failed";
+  const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "dead_letter";
   const retryDelayMinutes = willRetry ? nextRetryDelayMinutes(attempt) : 0;
   await sql`
     insert into delivery_attempts (event_id, attempt_number, destination_url, request_headers, response_status, response_headers, response_body, error, latency_ms)
@@ -57,6 +57,7 @@ export async function processDelivery(eventId: string) {
     update webhook_events set status = ${status}, locked_at = null, retry_count = ${delivery.ok ? Math.max(0, attempt - 1) : attempt},
       revenue_at_risk = case when ${delivery.ok} then 0 else revenue_amount end,
       next_retry_at = case when ${willRetry} then now() + (${retryDelayMinutes} * interval '1 minute') else null end,
+      dead_lettered_at = case when ${status === "dead_letter"} then now() else null end, cancelled_at = null,
       last_error = ${delivery.error || (delivery.ok ? null : `Destination HTTP ${delivery.status}`)}, updated_at = now()
     where id = ${claimed.id}
   `;

@@ -14,9 +14,9 @@ export type SystemHealth = {
 export async function readSystemHealth(): Promise<SystemHealth> {
   const sql = requireSql();
   const [row] = await sql`
-    select count(*) filter (where status in ('queued','processing','retrying'))::int as pending,
-      coalesce(extract(epoch from (now() - (min(received_at) filter (where status in ('queued','processing','retrying'))))), 0)::int as oldest_pending_seconds,
-      max(updated_at) filter (where status in ('delivered','failed')) as last_delivery_at
+    select count(*) filter (where status in ('queued','processing','retrying','received'))::int as pending,
+      coalesce(extract(epoch from (now() - (min(received_at) filter (where status in ('queued','processing','retrying','received'))))), 0)::int as oldest_pending_seconds,
+      max(updated_at) filter (where status in ('delivered','failed','dead_letter','cancelled')) as last_delivery_at
     from webhook_events
   `;
   const configured = queueConfigured();
