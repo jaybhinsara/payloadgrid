@@ -12,9 +12,13 @@ export async function POST(request: Request) {
   try {
     const context = await requireSession(); requireRole(context, ["owner", "admin"]);
     const body = schema.parse(await request.json()); const email = body.email.toLowerCase(); const sql = requireSql();
+    if (context.organization.role === "admin" && body.role === "admin") return NextResponse.json({ ok: false, error: "Only the workspace owner can add administrators" }, { status: 403 });
     const [user] = await sql`select id from users where email = ${email} limit 1`;
     if (user) {
-      const [existing] = await sql`select 1 from organization_members where organization_id = ${context.organization.id} and user_id = ${user.id}`;
+      const [existing] = await sql`select role from organization_members where organization_id = ${context.organization.id} and user_id = ${user.id}`;
+      if (String(user.id) === context.user.id) return NextResponse.json({ ok: false, error: "Use your account settings to manage your own profile" }, { status: 400 });
+      if (existing?.role === "owner") return NextResponse.json({ ok: false, error: "The workspace owner role cannot be changed" }, { status: 403 });
+      if (context.organization.role === "admin" && existing?.role === "admin") return NextResponse.json({ ok: false, error: "Only the workspace owner can manage administrators" }, { status: 403 });
       if (!existing) {
         const [usage] = await sql`select count(*)::int as count from organization_members where organization_id = ${context.organization.id}`;
         if (Number(usage.count) >= BETA_LIMITS.teamMembers) throw new UsageLimitError(`Public beta supports up to ${BETA_LIMITS.teamMembers} team members`);

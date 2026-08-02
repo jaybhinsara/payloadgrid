@@ -732,3 +732,12 @@ p { color: var(--muted); line-height: 1.6; }
   .notification-list article > span:nth-child(3), .notification-list time { grid-column: 2; text-align: left; }
   .form-row { grid-template-columns: 1fr; }
 }
+/* Workspace and team management */
+.workspace-switch.single { grid-template-columns: 34px minmax(0, 1fr); }
+.member-actions { display: flex !important; grid-template-columns: minmax(105px, auto) 30px !important; align-items: center; gap: 6px !important; }
+.member-actions select { width: 118px; min-height: 31px; padding: 0 28px 0 9px; font-size: 10px; text-transform: capitalize; }
+.member-actions .icon-button { width: 31px; height: 31px; flex-basis: 31px; }
+@media (max-width: 520px) {
+  .team-member-list > article { grid-template-columns: 34px minmax(0, 1fr); }
+  .team-member-list .role-pill, .member-actions { grid-column: 2; justify-self: start; }
+}
