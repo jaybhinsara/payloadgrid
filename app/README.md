@@ -46,8 +46,8 @@ Use the base64 value for `PAYLOADGRID_ENCRYPTION_KEY` and the hex value for `CRO
 Set the Vercel Root Directory to `app`. Add these Production and Preview variables:
 
 - `DATABASE_URL`: Neon pooled connection string
-- `NEXT_PUBLIC_SITE_URL`: canonical public URL without a trailing slash
-- `PAYLOADGRID_APP_URL`: same public URL for server-generated links and queue callbacks
+- `NEXT_PUBLIC_SITE_URL`: canonical public URL without a trailing slash (`https://payloadgrid.vercel.app` in production)
+- `PAYLOADGRID_APP_URL`: same public URL for server-generated links and queue callbacks (`https://payloadgrid.vercel.app` in production)
 - `NEXT_PUBLIC_SUPPORT_EMAIL`: public support address
 - `PAYLOADGRID_ENCRYPTION_KEY`: stable 32-byte base64 or 64-character hex key
 - `CRON_SECRET`: independent random secret for protected maintenance and fallback routes
