@@ -8,13 +8,13 @@ import { queueConfigured } from "@/lib/queue";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type MetricRow = { total_events: string; terminal_events: string; queued_events: string; processing_events: string; failed_events: string; retrying_events: string; delivered_events: string; revenue_at_risk: Array<{ currency: string; amount: number | string }>; avg_latency: string | null };
+type MetricRow = { total_events: string; terminal_events: string; queued_events: string; processing_events: string; failed_events: string; retrying_events: string; dead_lettered_events: string; delivered_events: string; oldest_pending_at: string | null; revenue_at_risk: Array<{ currency: string; amount: number | string }>; avg_latency: string | null };
 
 export async function GET() {
   try {
     const context = await requireSession();
     const sql = requireSql();
-    const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, metricRows, usageRows] = await Promise.all([
+    const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, metricRows, usageRows] = await Promise.all([
       sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
       sql`
         select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active, ep.created_at,
@@ -41,7 +41,16 @@ export async function GET() {
       sql`select id, name, key_prefix, last_used_at, revoked_at, created_at from api_keys where project_id = ${context.project.id} order by created_at desc`,
       sql`select u.id, u.name, u.email, om.role, om.created_at from organization_members om join users u on u.id = om.user_id where om.organization_id = ${context.organization.id} order by om.created_at asc`,
       sql`select id, name, event_type, config, is_active, created_at from transformations where project_id = ${context.project.id} order by created_at desc`,
-      sql`select id, name, channel, destination, failure_threshold, is_active, created_at from alert_rules where project_id = ${context.project.id} order by created_at desc`,
+      sql`select id, name, channel, destination, failure_threshold, window_minutes, is_active, created_at from alert_rules where project_id = ${context.project.id} order by created_at desc`,
+      sql`
+        select n.id, n.event_id, n.status, n.response_status, n.error, n.created_at,
+          r.name as rule_name, r.channel, e.event_type
+        from alert_notifications n
+        join alert_rules r on r.id = n.rule_id
+        join webhook_events e on e.id = n.event_id
+        where r.project_id = ${context.project.id}
+        order by n.created_at desc limit 30
+      `,
       sql`select id, action, resource_type, resource_id, metadata, created_at from audit_logs where organization_id = ${context.organization.id} order by created_at desc limit 30`,
       sql`
         select count(*)::text as total_events,
@@ -50,7 +59,9 @@ export async function GET() {
           count(*) filter (where status = 'processing')::text as processing_events,
           count(*) filter (where status in ('failed','dead_letter'))::text as failed_events,
           count(*) filter (where status = 'retrying')::text as retrying_events,
+          count(*) filter (where status = 'dead_letter')::text as dead_lettered_events,
           count(*) filter (where status = 'delivered')::text as delivered_events,
+          min(received_at) filter (where status in ('queued','processing','received','retrying')) as oldest_pending_at,
           coalesce((
             select jsonb_agg(jsonb_build_object('currency', risk.currency, 'amount', risk.amount) order by risk.amount desc)
             from (
@@ -75,9 +86,10 @@ export async function GET() {
     const metric = metricRows[0] as MetricRow | undefined;
     const total = Number(metric?.total_events || 0); const terminal = Number(metric?.terminal_events || 0); const delivered = Number(metric?.delivered_events || 0);
     return NextResponse.json({
-      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, auditLogs, system: { queueConfigured: queueConfigured() }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: BETA_LIMITS },
+      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, system: { queueConfigured: queueConfigured() }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: BETA_LIMITS },
       metrics: {
         totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0), queuedEvents: Number(metric?.queued_events || 0), processingEvents: Number(metric?.processing_events || 0),
+        deadLetteredEvents: Number(metric?.dead_lettered_events || 0), oldestPendingAt: metric?.oldest_pending_at || null,
         openIncidents: Number(metric?.failed_events || 0) + Number(metric?.retrying_events || 0),
         successRate: terminal ? Math.round((delivered / terminal) * 1000) / 10 : 100,
         avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: metric?.revenue_at_risk || [], endpoints: endpoints.length

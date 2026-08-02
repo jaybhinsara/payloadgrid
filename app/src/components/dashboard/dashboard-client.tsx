@@ -82,7 +82,7 @@ export function DashboardClient() {
       {view === "api-keys" ? <ApiKeysView data={data} busy={busy} submit={submit} revoke={(id) => { void mutate(`/api/api-keys/${id}`, undefined, "DELETE"); }} reveal={setNewToken} /> : null}
       {view === "team" ? <TeamView data={data} busy={busy} submit={submit} reveal={setInviteToken} /> : null}
       {view === "usage" ? <UsageView data={data} /> : null}
-      {view === "settings" ? <AutomationsView data={data} busy={busy} submit={submit} /> : null}
+      {view === "settings" ? <AutomationsView data={data} busy={busy} submit={submit} mutate={mutate} /> : null}
     </div></section>
     {selectedEvent ? <EventDrawer event={selectedEvent} endpointName={endpointName} close={() => setSelectedEvent(null)} copy={copy} replay={replayDelivery} mutate={mutate} /> : null}
     {newToken ? <SecretModal title="API key created" copy="This key is shown once. Store it securely before closing." secret={newToken} close={() => setNewToken("")} copyValue={copy} /> : null}

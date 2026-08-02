@@ -14,10 +14,11 @@ export type DashboardData = {
   eventTypes: Array<{ id: string; name: string; description: string | null; created_at: string }>;
   apiKeys: Array<{ id: string; name: string; key_prefix: string; last_used_at: string | null; revoked_at: string | null; created_at: string }>;
   members: Array<{ id: string; name: string; email: string; role: string; created_at: string }>;
-  transformations: Array<{ id: string; name: string; event_type: string | null; config: Record<string, unknown>; is_active: boolean }>;
-  alerts: Array<{ id: string; name: string; channel: string; destination: string; failure_threshold: number; is_active: boolean }>;
+  transformations: Array<{ id: string; name: string; event_type: string | null; config: { addFields?: Record<string, unknown>; removeFields?: string[]; renameFields?: Record<string, string> }; is_active: boolean }>;
+  alerts: Array<{ id: string; name: string; channel: "email" | "slack" | "webhook"; destination: string; failure_threshold: number; window_minutes: number; is_active: boolean }>;
+  alertNotifications: Array<{ id: string; event_id: string; status: string; response_status: number | null; error: string | null; created_at: string; rule_name: string; channel: string; event_type: string }>;
   auditLogs: Array<{ id: string; action: string; resource_type: string; resource_id: string | null; created_at: string }>;
-  metrics: { totalEvents: number; deliveredEvents: number; failedEvents: number; retryingEvents: number; queuedEvents: number; processingEvents: number; openIncidents: number; successRate: number; avgLatency: number; revenueAtRisk: Array<{ currency: string; amount: number | string }>; endpoints: number };
+  metrics: { totalEvents: number; deliveredEvents: number; failedEvents: number; retryingEvents: number; queuedEvents: number; processingEvents: number; deadLetteredEvents: number; oldestPendingAt: string | null; openIncidents: number; successRate: number; avgLatency: number; revenueAtRisk: Array<{ currency: string; amount: number | string }>; endpoints: number };
 };
 export type DashboardMutate = (path: string, body?: unknown, method?: string) => Promise<Record<string, unknown> | null>;
 export type DashboardSubmit = (event: FormEvent<HTMLFormElement>, path: string, build: (form: FormData) => unknown, after?: (payload: Record<string, unknown>) => void) => Promise<void>;
