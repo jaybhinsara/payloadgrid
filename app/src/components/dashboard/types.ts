@@ -1,13 +1,13 @@
 import type { FormEvent, ReactNode } from "react";
 
-export type View = "overview" | "applications" | "endpoints" | "messages" | "deliveries" | "event-types" | "api-keys" | "team" | "usage" | "settings";
+export type View = "overview" | "applications" | "endpoints" | "messages" | "deliveries" | "event-types" | "api-keys" | "team" | "usage" | "settings" | "workspace";
 export type Application = { id: string; name: string; uid: string; description: string | null; created_at: string };
 export type Endpoint = { id: string; application_id: string | null; name: string; provider: string; destination_url: string; signing_secret: string | null; provider_verification_required: boolean; provider_secret_hint: string | null; is_active: boolean; event_types: string[]; created_at: string };
 export type EventRow = { id: string; endpoint_id: string; endpoint_name: string; application_id: string | null; message_id: string | null; direction: string; provider: string; provider_event_id: string | null; event_type: string; status: string; revenue_at_risk: number; revenue_currency: string | null; received_at: string; response_status: number | null; response_body: string | null; latency_ms: number | null; error: string | null; retry_count: number; max_retries: number; next_retry_at: string | null; last_error: string | null; cancelled_at: string | null; dead_lettered_at: string | null; attempt_count: number; request_headers: Record<string, unknown>; request_body: unknown };
 export type DeliveryAttempt = { id: string; attempt_number: number; destination_url: string; request_headers: Record<string, unknown>; response_status: number | null; response_headers: Record<string, unknown>; response_body: string | null; error: string | null; latency_ms: number; created_at: string };
 export type DashboardData = {
   ok: boolean; error?: string; appUrl: string; system: { queueConfigured: boolean }; usage: { periodStart: string; acceptedEvents: number; limits: { messagesPerMonth: number; apiRequestsPerMinute: number; inboundRequestsPerMinute: number; endpoints: number; teamMembers: number; payloadRetentionDays: number } };
-  context: { user: { id: string; name: string; email: string }; organization: { id: string; name: string; slug: string; plan: string; role: string }; organizations: Array<{ id: string; name: string; role: string }>; project: { id: string; name: string; environment: string } };
+  context: { user: { id: string; name: string; email: string }; organization: { id: string; name: string; slug: string; plan: string; role: string }; organizations: Array<{ id: string; name: string; role: string }>; project: { id: string; name: string; slug: string; environment: string }; projects: Array<{ id: string; name: string; slug: string; environment: string }> };
   providers: Array<{ id: string; name: string }>;
   applications: Application[]; endpoints: Endpoint[]; events: EventRow[];
   messages: Array<{ id: string; application_id: string; event_type: string; status: string; created_at: string }>;
