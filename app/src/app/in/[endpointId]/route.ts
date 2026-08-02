@@ -15,9 +15,9 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
   const { endpointId } = await contextValue.params;
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
-    if (contentLength > MAX_PAYLOAD_BYTES) return NextResponse.json({ ok: false, error: "Payload exceeds the 256 KB public beta limit" }, { status: 413 });
+    if (contentLength > MAX_PAYLOAD_BYTES) return NextResponse.json({ ok: false, error: "Payload exceeds the 256 KB plan limit" }, { status: 413 });
     const rawBody = await request.text();
-    if (Buffer.byteLength(rawBody, "utf8") > MAX_PAYLOAD_BYTES) return NextResponse.json({ ok: false, error: "Payload exceeds the 256 KB public beta limit" }, { status: 413 });
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_PAYLOAD_BYTES) return NextResponse.json({ ok: false, error: "Payload exceeds the 256 KB plan limit" }, { status: 413 });
     const sql = requireSql();
     const [endpoint] = await sql`
       select id, project_id, application_id, provider, destination_url, is_active, provider_secret_encrypted,

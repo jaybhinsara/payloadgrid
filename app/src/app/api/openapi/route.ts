@@ -4,7 +4,7 @@ import { SITE_URL } from "@/lib/site";
 export function GET() {
   return NextResponse.json({
     openapi: "3.1.0",
-    info: { title: "PayloadGrid API", version: "0.2.0-beta", description: "Accept outbound webhook messages and provider callbacks. Public beta limits apply." },
+    info: { title: "PayloadGrid API", version: "1.0.0", description: "Accept outbound webhook messages and provider callbacks through PayloadGrid." },
     servers: [{ url: SITE_URL }],
     paths: {
       "/api/v1/messages": {
@@ -15,7 +15,7 @@ export function GET() {
           requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateMessage" } } } },
           responses: {
             "202": { description: "Message persisted and accepted for asynchronous delivery.", content: { "application/json": { schema: { $ref: "#/components/schemas/AcceptedMessage" } } } },
-            "200": { description: "Idempotent duplicate; existing message returned." }, "401": { description: "Invalid or revoked API key." }, "429": { description: "Rate or monthly beta limit exceeded." }
+            "200": { description: "Idempotent duplicate; existing message returned." }, "401": { description: "Invalid or revoked API key." }, "429": { description: "Rate or monthly plan limit exceeded." }
           }
         }
       },
@@ -24,7 +24,7 @@ export function GET() {
           summary: "Accept an inbound provider webhook", operationId: "receiveProviderWebhook",
           parameters: [{ in: "path", name: "endpointId", required: true, schema: { type: "string", format: "uuid" } }],
           requestBody: { required: true, content: { "application/json": { schema: {} } } },
-          responses: { "200": { description: "Provider request verified, deduplicated, and accepted." }, "401": { description: "Provider signature verification failed." }, "413": { description: "Payload exceeds 256 KB." }, "429": { description: "Rate or monthly beta limit exceeded." } }
+          responses: { "200": { description: "Provider request verified, deduplicated, and accepted." }, "401": { description: "Provider signature verification failed." }, "413": { description: "Payload exceeds 256 KB." }, "429": { description: "Rate or monthly plan limit exceeded." } }
         }
       },
       "/api/health": { get: { summary: "Read public component health", operationId: "getHealth", responses: { "200": { description: "Live component health." }, "503": { description: "Database unavailable." } } } }

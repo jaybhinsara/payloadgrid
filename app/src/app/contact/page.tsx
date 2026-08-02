@@ -2,5 +2,12 @@ import type { Metadata } from "next";
 import { Mail, MessageSquareText, ShieldAlert } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
 import { SUPPORT_EMAIL } from "@/lib/site";
-export const metadata: Metadata = { title: "Contact", description: "Contact PayloadGrid for beta access, support, capacity reviews, or security reports." };
-export default function ContactPage() { const subject = encodeURIComponent("PayloadGrid beta question"); return <PublicPage eyebrow="Contact" title="Talk directly to the builder." intro="Send the provider, expected event volume, and what currently fails. Specific context gets a useful answer faster."><section className="contact-grid"><a href={`mailto:${SUPPORT_EMAIL}?subject=${subject}`}><Mail size={22} /><h2>Product and beta access</h2><p>{SUPPORT_EMAIL}</p><span>Include provider, monthly events, and required region.</span></a><a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("PayloadGrid support request")}`}><MessageSquareText size={22} /><h2>Technical support</h2><p>Describe the event ID and observed behavior.</p><span>Never email API keys, provider secrets, or complete payment payloads.</span></a><a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("PayloadGrid security report")}`}><ShieldAlert size={22} /><h2>Security report</h2><p>Request a private disclosure channel.</p><span>Do not include exploit details or customer data in the first message.</span></a></section></PublicPage>; }
+
+export const metadata: Metadata = { title: "Contact", description: "Contact PayloadGrid for product questions, technical support, capacity planning, or security reports." };
+
+export default function ContactPage() {
+  const subject = encodeURIComponent("PayloadGrid product question");
+  return <PublicPage eyebrow="Contact" title="Talk to PayloadGrid." intro="Send your expected event volume, architecture, and operational requirements. Specific context helps us give you a useful answer faster.">
+    <section className="contact-grid"><a href={`mailto:${SUPPORT_EMAIL}?subject=${subject}`}><Mail size={22} /><h2>Product and capacity</h2><p>{SUPPORT_EMAIL}</p><span>Include monthly events, peak throughput, providers, and required regions.</span></a><a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("PayloadGrid support request")}`}><MessageSquareText size={22} /><h2>Technical support</h2><p>Describe the event ID and observed behavior.</p><span>Never email API keys, provider secrets, or complete payment payloads.</span></a><a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("PayloadGrid security report")}`}><ShieldAlert size={22} /><h2>Security report</h2><p>Request a private disclosure channel.</p><span>Do not include exploit details or customer data in the first message.</span></a></section>
+  </PublicPage>;
+}

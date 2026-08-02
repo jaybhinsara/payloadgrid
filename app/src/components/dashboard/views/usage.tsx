@@ -10,9 +10,9 @@ export function UsageView({ data }: { data: DashboardData }) {
     { label: "Team members", value: data.members.length, limit: limits.teamMembers, icon: Users, copy: "People with access to this workspace" }
   ];
   return <>
-    <SectionHead eyebrow="Plan and capacity" heading="Usage" copy={`Current public beta usage since ${new Date(data.usage.periodStart).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`} />
+    <SectionHead eyebrow="Plan and capacity" heading="Usage" copy={`Current plan usage since ${new Date(data.usage.periodStart).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`} />
     <section className="usage-summary">
-      <article><span><Gauge size={18} /></span><div><small>Plan</small><strong>{data.context.organization.plan === "free" ? "Public beta" : data.context.organization.plan}</strong></div></article>
+      <article><span><Gauge size={18} /></span><div><small>Plan</small><strong>{data.context.organization.plan === "free" ? "Free" : data.context.organization.plan}</strong></div></article>
       <article><span><Database size={18} /></span><div><small>Payload retention</small><strong>{limits.payloadRetentionDays} days</strong></div></article>
       <article><span><CalendarDays size={18} /></span><div><small>Resets</small><strong>{new Date(new Date(data.usage.periodStart).getFullYear(), new Date(data.usage.periodStart).getMonth() + 1, 1).toLocaleDateString()}</strong></div></article>
     </section>

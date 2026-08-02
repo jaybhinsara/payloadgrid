@@ -4,7 +4,7 @@ import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { appUrl } from "@/lib/constants";
 import { requireSql } from "@/lib/db";
-import { BETA_LIMITS, UsageLimitError } from "@/lib/limits";
+import { PLAN_LIMITS, UsageLimitError } from "@/lib/limits";
 import { randomToken, sha256 } from "@/lib/security";
 
 const schema = z.object({ email: z.string().trim().email(), role: z.enum(["admin", "developer", "viewer"]) });
@@ -21,14 +21,14 @@ export async function POST(request: Request) {
       if (context.organization.role === "admin" && existing?.role === "admin") return NextResponse.json({ ok: false, error: "Only the workspace owner can manage administrators" }, { status: 403 });
       if (!existing) {
         const [usage] = await sql`select count(*)::int as count from organization_members where organization_id = ${context.organization.id}`;
-        if (Number(usage.count) >= BETA_LIMITS.teamMembers) throw new UsageLimitError(`Public beta supports up to ${BETA_LIMITS.teamMembers} team members`);
+        if (Number(usage.count) >= PLAN_LIMITS.teamMembers) throw new UsageLimitError(`Current plan supports up to ${PLAN_LIMITS.teamMembers} team members`);
       }
       await sql`insert into organization_members (organization_id, user_id, role) values (${context.organization.id}, ${user.id}, ${body.role}) on conflict (organization_id, user_id) do update set role = excluded.role`;
       await writeAudit(context.organization.id, context.user.id, "member.added", "user", String(user.id), { role: body.role });
       return NextResponse.json({ ok: true, added: true });
     }
     const [usage] = await sql`select ((select count(*) from organization_members where organization_id = ${context.organization.id}) + (select count(*) from organization_invitations where organization_id = ${context.organization.id} and accepted_at is null and expires_at > now()))::int as count`;
-    if (Number(usage.count) >= BETA_LIMITS.teamMembers) throw new UsageLimitError(`Public beta supports up to ${BETA_LIMITS.teamMembers} members and pending invitations`);
+    if (Number(usage.count) >= PLAN_LIMITS.teamMembers) throw new UsageLimitError(`Current plan supports up to ${PLAN_LIMITS.teamMembers} members and pending invitations`);
     const token = randomToken(32);
     await sql`
       insert into organization_invitations (organization_id, email, role, token_hash, invited_by, expires_at)

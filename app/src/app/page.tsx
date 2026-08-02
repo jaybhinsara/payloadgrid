@@ -17,7 +17,7 @@ const structuredData = {
       applicationCategory: "DeveloperApplication", operatingSystem: "Any", browserRequirements: "Requires a modern web browser",
       description: "Global webhook infrastructure for SaaS and developer teams to send, receive, sign, retry, replay, and monitor events.",
       featureList: ["Inbound and outbound webhooks", "Automatic webhook retries", "Webhook replay and delivery logs", "Provider signature verification", "HMAC request signatures", "Multi-tenant organizations and projects"],
-      provider: { "@id": `${SITE_URL}/#organization` }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free public beta" }
+      provider: { "@id": `${SITE_URL}/#organization` }, offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free plan" }
     }
   ]
 };

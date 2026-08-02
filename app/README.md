@@ -13,7 +13,7 @@ PayloadGrid is a multi-tenant inbound and outbound webhook platform for SaaS, co
 - AES-256-GCM encryption for provider verification secrets
 - HMAC-SHA256 signing for PayloadGrid outbound delivery
 - HTTPS enforcement, private-address SSRF checks, payload limits, rate limits, and duplicate protection
-- Three-day beta payload retention with scheduled redaction
+- Three-day payload retention with scheduled redaction
 - Public documentation, OpenAPI description, pricing, security, privacy, terms, contact, status, and no-signup playground
 - Source-ready Node.js and Python clients under `sdks/` (not published yet)
 
@@ -21,7 +21,7 @@ PayloadGrid is a multi-tenant inbound and outbound webhook platform for SaaS, co
 
 1. Copy `app/.env.example` to `app/.env.local`.
 2. Set `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `PAYLOADGRID_APP_URL`, `CRON_SECRET`, and `PAYLOADGRID_ENCRYPTION_KEY`.
-3. Run the complete `app/db/schema.sql` file in the Neon SQL editor. It is idempotent and includes all beta migrations.
+3. Run the complete `app/db/schema.sql` file in the Neon SQL editor. It is idempotent and includes all current migrations.
 4. Install and start:
 
 ```powershell
@@ -85,7 +85,7 @@ For verified new accounts and password reset, configure:
 - `RESEND_API_KEY`
 - `PAYLOADGRID_AUTH_FROM`: a verified sender such as `PayloadGrid <auth@your-domain.com>`
 
-When these are absent, existing beta authentication remains available and new accounts are marked verified automatically. Add email configuration before inviting external users.
+When these are absent, local password authentication remains available and new accounts are marked verified automatically. Add email configuration before inviting external users.
 
 Optional alert variables:
 
@@ -120,4 +120,4 @@ npm.cmd run typecheck
 npm.cmd run build
 ```
 
-The public beta does not claim an SLA or compliance certification. Before charging customers, complete an independent security review, external monitoring history, legal review, queue load testing, backup recovery testing, SDK publication, usage billing, and customer validation.
+Before offering contractual reliability or regulated-data commitments, complete an independent security review, external monitoring history, legal review, queue load testing, backup recovery testing, SDK publication, usage billing, and customer validation.

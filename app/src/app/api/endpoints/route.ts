@@ -4,7 +4,7 @@ import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { assertSafeDestinationUrl } from "@/lib/destination-security";
 import { requireSql } from "@/lib/db";
-import { BETA_LIMITS, UsageLimitError } from "@/lib/limits";
+import { PLAN_LIMITS, UsageLimitError } from "@/lib/limits";
 import { encryptSecret, randomToken } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const destinationUrl = await assertSafeDestinationUrl(body.destinationUrl);
     const sql = requireSql();
     const [count] = await sql`select count(*)::int as count from endpoints where project_id = ${context.project.id} and deleted_at is null`;
-    if (Number(count.count) >= BETA_LIMITS.endpoints) throw new UsageLimitError(`Public beta supports up to ${BETA_LIMITS.endpoints} endpoints per project`);
+    if (Number(count.count) >= PLAN_LIMITS.endpoints) throw new UsageLimitError(`Current plan supports up to ${PLAN_LIMITS.endpoints} endpoints per project`);
     const [application] = await sql`select id from applications where id = ${body.applicationId} and project_id = ${context.project.id} limit 1`;
     if (!application) return NextResponse.json({ ok: false, error: "Application not found" }, { status: 404 });
     const encryptedProviderSecret = body.providerSecret ? encryptSecret(body.providerSecret) : null;
