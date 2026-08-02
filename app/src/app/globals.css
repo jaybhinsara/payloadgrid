@@ -551,7 +551,7 @@ p { color: var(--muted); line-height: 1.6; }
 .check-control strong { font-size: 12px; }
 .endpoint-drawer > footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding: 17px 23px; }
 
-.delivery-filters { display: grid; grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(140px, .75fr)) auto; align-items: center; gap: 9px; margin-bottom: 12px; }
+.delivery-filters { display: grid; grid-template-columns: minmax(260px, 1.5fr) repeat(3, minmax(150px, .75fr)); align-items: center; gap: 12px; margin-bottom: 16px; }
 .delivery-filters .search-box { width: 100%; }
 .delivery-filters select { min-height: 39px; font-size: 11px; text-transform: capitalize; }
 .delivery-filters > span { color: var(--muted); font-size: 10px; font-weight: 750; white-space: nowrap; }
@@ -637,9 +637,14 @@ p { color: var(--muted); line-height: 1.6; }
 .bulk-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; margin-bottom: 12px; border: 1px solid #b8cce9; border-radius: 7px; background: var(--blue-bg); padding: 10px 12px; }
 .bulk-toolbar strong { color: #244d91; font-size: 12px; }
 .bulk-toolbar > span { color: #5f7190; font-size: 10px; }
-.delivery-list.loading { opacity: .62; }
-.delivery-table.operations-table { min-width: 1180px; }
-.delivery-table.operations-table .table-header, .delivery-table.operations-table .table-row { grid-template-columns: 28px 1.2fr .6fr 1fr .85fr .9fr .5fr .58fr 70px; }
+.delivery-table.operations-table { min-width: 1040px; }
+.delivery-table.operations-table .table-header, .delivery-table.operations-table .table-row {
+  grid-template-columns: 26px minmax(190px, 1.35fr) 98px minmax(150px, 1fr) 112px minmax(110px, .75fr) 70px 76px 70px;
+  gap: 14px;
+}
+.operations-table .table-row > span:nth-child(2) { display: grid; min-width: 0; gap: 3px; overflow: hidden; }
+.operations-table .table-row > span:nth-child(2) strong,
+.operations-table .table-row > span:nth-child(2) small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operations-table input[type="checkbox"] { width: 15px; min-height: 15px; margin: 0; accent-color: var(--coral); }
 .attempt-section { margin: 22px 23px 5px; border-top: 1px solid var(--line); padding-top: 20px; }
 .attempt-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 15px; }

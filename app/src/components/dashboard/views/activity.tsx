@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Braces, ChevronLeft, ChevronRight, Eye, LoaderCircle, MessageSquareText, Plus, RotateCcw, Search, Send } from "lucide-react";
+import { Activity, Braces, ChevronLeft, ChevronRight, Eye, MessageSquareText, Plus, RotateCcw, Search, Send } from "lucide-react";
 import { Empty, SectionHead, Status, timeAgo } from "@/components/dashboard/common";
 import type { DashboardData, DashboardMutate, DashboardSubmit, EventRow } from "@/components/dashboard/types";
 
@@ -33,11 +33,15 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
   const [reload, setReload] = useState(0);
   const cursor = cursorHistory[cursorHistory.length - 1];
   const refreshInitialized = useRef(false);
+  const tableRef = useRef<HTMLElement>(null);
 
   useEffect(() => { if (refreshInitialized.current) setReload((value) => value + 1); else refreshInitialized.current = true; }, [refreshVersion]);
 
   useEffect(() => { const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300); return () => window.clearTimeout(timer); }, [search]);
   useEffect(() => { setCursorHistory([]); }, [debouncedSearch, status, direction, endpointId]);
+  useEffect(() => {
+    tableRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+  }, [cursor, debouncedSearch, status, direction, endpointId]);
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams({ limit: "20" });
@@ -73,10 +77,10 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
       <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option>{["queued", "processing", "retrying", "delivered", "failed", "dead_letter", "cancelled", "received"].map((value) => <option key={value} value={value}>{value.replace("_", " ")}</option>)}</select>
       <select aria-label="Filter by direction" value={direction} onChange={(event) => setDirection(event.target.value)}><option value="all">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
       <select aria-label="Filter by endpoint" value={endpointId} onChange={(event) => setEndpointId(event.target.value)}><option value="all">All endpoints</option>{endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}</select>
-      <span>{loading ? <LoaderCircle className="spin" size={14} /> : `${events.length} on page`}</span>
+
     </section>
     {selected.size ? <section className="bulk-toolbar"><strong>{selected.size} selected</strong><span>Replay up to 25 deliveries at once.</span><button className="button secondary small" onClick={() => setSelected(new Set())}>Clear</button><button className="button primary small" disabled={selected.size > 25} onClick={() => void replaySelected()}><RotateCcw size={14} /> Replay selected</button></section> : null}
-    <section className={`content-card delivery-list ${loading ? "loading" : ""}`}>{events.length ? <div className="data-table delivery-table operations-table"><div className="table-header"><span><input type="checkbox" checked={allSelected} onChange={togglePage} aria-label="Select page" /></span><span>Event</span><span>Direction</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Attempts</span><span>Time</span><span /></div>{events.map((event) => <div className="table-row" key={event.id}><span><input type="checkbox" checked={selected.has(event.id)} disabled={!REPLAYABLE_STATUSES.has(event.status)} onChange={() => toggle(event.id)} aria-label={`Select ${event.event_type}`} /></span><span><strong>{event.event_type}</strong><small>{event.provider_event_id || event.id.slice(0, 12)}</small></span><span><i className="direction-pill">{event.direction}</i></span><span>{event.endpoint_name}</span><span><Status value={event.status} /></span><span>{event.response_status ? `HTTP ${event.response_status}` : event.error || event.last_error || "No response"}</span><span>{event.attempt_count}/{event.max_retries}</span><span>{timeAgo(event.received_at)}</span><span className="row-actions"><button className="icon-button" onClick={() => inspect(event)} title="Inspect attempts"><Eye size={15} /></button><button className="icon-button" disabled={!REPLAYABLE_STATUSES.has(event.status)} onClick={() => void replayOne(event.id)} title="Replay"><RotateCcw size={15} /></button></span></div>)}</div> : <Empty icon={<Activity size={22} />} title="No matching deliveries" copy="Change the filters or send an event to this workspace." />}</section>
+    <section ref={tableRef} className="content-card delivery-list" aria-busy={loading}>{events.length ? <div className="data-table delivery-table operations-table"><div className="table-header"><span><input type="checkbox" checked={allSelected} onChange={togglePage} aria-label="Select page" /></span><span>Event</span><span>Direction</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Attempts</span><span>Time</span><span /></div>{events.map((event) => <div className="table-row" key={event.id}><span><input type="checkbox" checked={selected.has(event.id)} disabled={!REPLAYABLE_STATUSES.has(event.status)} onChange={() => toggle(event.id)} aria-label={`Select ${event.event_type}`} /></span><span><strong>{event.event_type}</strong><small>{event.provider_event_id || event.id.slice(0, 12)}</small></span><span><i className="direction-pill">{event.direction}</i></span><span>{event.endpoint_name}</span><span><Status value={event.status} /></span><span>{event.response_status ? `HTTP ${event.response_status}` : event.error || event.last_error || "No response"}</span><span>{event.attempt_count}/{event.max_retries}</span><span>{timeAgo(event.received_at)}</span><span className="row-actions"><button className="icon-button" onClick={() => inspect(event)} title="Inspect attempts"><Eye size={15} /></button><button className="icon-button" disabled={!REPLAYABLE_STATUSES.has(event.status)} onClick={() => void replayOne(event.id)} title="Replay"><RotateCcw size={15} /></button></span></div>)}</div> : <Empty icon={<Activity size={22} />} title="No matching deliveries" copy="Change the filters or send an event to this workspace." />}</section>
     <nav className="table-pagination" aria-label="Delivery pages"><span>Page {cursorHistory.length + 1}</span><div><button className="icon-button" disabled={!cursorHistory.length || loading} onClick={() => setCursorHistory((value) => value.slice(0, -1))} aria-label="Previous page"><ChevronLeft size={16} /></button><button className="icon-button" disabled={!nextCursor || loading} onClick={() => nextCursor && setCursorHistory((value) => [...value, nextCursor])} aria-label="Next page"><ChevronRight size={16} /></button></div></nav>
   </>;
 }
