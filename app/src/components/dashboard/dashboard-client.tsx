@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, AlertTriangle, AppWindow, ArchiveX, Ban, BarChart3, CircleCheck, BookOpen, Building2, Braces, ChevronDown, Copy, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, Settings2, Users, X } from "lucide-react";
 import { Brand } from "@/components/brand";
@@ -73,7 +73,7 @@ export function DashboardClient() {
   if (!data) return <main className="loading-screen"><Brand /><LoaderCircle className="spin" size={25} /><p>{error || "Loading your workspace"}</p>{error ? <button className="button secondary" onClick={() => load(true)}>Try again</button> : null}</main>;
 
   return <main className="console-shell">
-    <aside className={`console-sidebar ${menuOpen ? "open" : ""}`}><div className="sidebar-brand"><Brand href="/dashboard" /><button className="icon-button mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={19} /></button></div><div className={`workspace-switch ${data.context.organizations.length === 1 ? "single" : ""}`}><span className="workspace-avatar">{data.context.organization.name.slice(0, 1).toUpperCase()}</span><span>{data.context.organizations.length > 1 ? <select aria-label="Active workspace" value={data.context.organization.id} onChange={(event) => { void switchOrganization(event.target.value); }}>{data.context.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select> : <strong>{data.context.organization.name}</strong>}<small>{data.context.project.name}</small></span>{data.context.organizations.length > 1 ? <ChevronDown size={15} /> : null}</div><nav className="console-nav">{["Workspace", "Activity", "Manage"].map((group) => <div key={group}><span>{group}</span>{nav.filter((item) => item.group === group).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setMenuOpen(false); }}><Icon size={17} />{label}{id === "deliveries" && data.metrics.openIncidents ? <em>{data.metrics.openIncidents}</em> : null}</button>)}</div>)}</nav><a className="sidebar-docs" href="/docs"><BookOpen size={16} /> Documentation</a><div className="sidebar-user"><span>{data.context.user.name.slice(0, 1).toUpperCase()}</span><div><strong>{data.context.user.name}</strong><small>{data.context.organization.role}</small></div><button className="icon-button" onClick={logout} title="Sign out"><LogOut size={16} /></button></div></aside>
+    <aside className={`console-sidebar ${menuOpen ? "open" : ""}`}><div className="sidebar-brand"><Brand href="/dashboard" /><button className="icon-button mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={19} /></button></div><WorkspaceSwitcher data={data} switchOrganization={switchOrganization} manage={() => { setView("workspace"); setMenuOpen(false); }} /><nav className="console-nav">{["Workspace", "Activity", "Manage"].map((group) => <div key={group}><span>{group}</span>{nav.filter((item) => item.group === group).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setMenuOpen(false); }}><Icon size={17} />{label}{id === "deliveries" && data.metrics.openIncidents ? <em>{data.metrics.openIncidents}</em> : null}</button>)}</div>)}</nav><a className="sidebar-docs" href="/docs"><BookOpen size={16} /> Documentation</a><div className="sidebar-user"><span>{data.context.user.name.slice(0, 1).toUpperCase()}</span><div><strong>{data.context.user.name}</strong><small>{data.context.organization.role}</small></div><button className="icon-button" onClick={logout} title="Sign out"><LogOut size={16} /></button></div></aside>
     <section className="console-content"><header className="console-topbar"><div><button className="icon-button mobile-only" onClick={() => setMenuOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div><span>{data.context.project.environment} /</span><strong>{nav.find((item) => item.id === view)?.label}</strong></div></div><div><span className="environment-pill"><i /> {data.system.queueConfigured ? "durable queue" : "beta fallback"}</span><span className="environment-pill"><i /> {data.context.project.environment}</span><button className="icon-button" onClick={() => load(true)} title="Refresh"><RefreshCw className={busy === "refresh" ? "spin" : ""} size={17} /></button><span className="avatar">{data.context.user.name.slice(0, 1).toUpperCase()}</span></div></header>{error ? <div className="alert-banner"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={15} /></button></div> : null}{notice ? <div className="notice-banner"><CircleCheck size={17} /><span>{notice}</span><button onClick={() => setNotice("")}><X size={15} /></button></div> : null}<div className="view-content">
       {view === "overview" ? <OverviewView data={data} setView={setView} inspect={setSelectedEvent} endpointName={endpointName} lastRefresh={lastRefresh} startOnboarding={startOnboarding} /> : null}
       {view === "applications" ? <ApplicationsView data={data} busy={busy} submit={submit} /> : null}
@@ -94,6 +94,23 @@ export function DashboardClient() {
   </main>;
 }
 
+function WorkspaceSwitcher({ data, switchOrganization, manage }: { data: DashboardData; switchOrganization: (organizationId: string) => Promise<void>; manage: () => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => { setOpen(false); }, [data.context.organization.id]);
+  useEffect(() => {
+    function dismiss(event: MouseEvent) { if (!root.current?.contains(event.target as Node)) setOpen(false); }
+    function keyboard(event: KeyboardEvent) { if (event.key === "Escape") setOpen(false); }
+    document.addEventListener("mousedown", dismiss); document.addEventListener("keydown", keyboard);
+    return () => { document.removeEventListener("mousedown", dismiss); document.removeEventListener("keydown", keyboard); };
+  }, []);
+  return <div className="workspace-picker" ref={root}>
+    <button className="workspace-switch" type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      <span className="workspace-avatar">{data.context.organization.name.slice(0, 1).toUpperCase()}</span><span><strong>{data.context.organization.name}</strong><small>{data.context.project.name}</small></span><ChevronDown className={open ? "open" : ""} size={16} />
+    </button>
+    {open ? <div className="workspace-menu" role="menu"><span>Workspaces</span>{data.context.organizations.map((organization) => <button type="button" role="menuitem" key={organization.id} className={organization.id === data.context.organization.id ? "active" : ""} onClick={() => { setOpen(false); if (organization.id !== data.context.organization.id) void switchOrganization(organization.id); }}><i>{organization.name.slice(0, 1).toUpperCase()}</i><span><strong>{organization.name}</strong><small>{organization.role}</small></span>{organization.id === data.context.organization.id ? <CircleCheck size={15} /> : null}</button>)}<button className="workspace-manage" type="button" role="menuitem" onClick={() => { setOpen(false); manage(); }}><Building2 size={15} /> Manage workspaces</button></div> : null}
+  </div>;
+}
 function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { event: EventRow; endpointName: (id: string) => string; close: () => void; copy: (value: string) => void; replay: (id: string) => Promise<Record<string, unknown> | null>; mutate: (path: string, body?: unknown, method?: string) => Promise<Record<string, unknown> | null> }) {
   const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
   const [loading, setLoading] = useState(true);
