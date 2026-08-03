@@ -158,7 +158,12 @@ p { color: var(--muted); line-height: 1.6; }
 .workspace-menu > button > svg { justify-self: end; color: #5fc797; }
 .workspace-menu > button.workspace-manage { min-height: 37px; grid-template-columns: 20px 1fr; margin-top: 5px; border-top: 1px solid #383e46; border-radius: 0 0 4px 4px; padding-top: 9px; color: #bfc6cb; font-size: 10px; font-weight: 750; }
 .workspace-menu > button.workspace-manage > svg { justify-self: start; color: #8f99a2; }
-.console-nav { flex: 1; overflow-y: auto; padding: 9px 10px; }
+.console-nav { flex: 1; overflow-y: auto; padding: 9px 10px; scrollbar-color: #4b5159 var(--charcoal); scrollbar-width: thin; }
+.console-nav::-webkit-scrollbar { width: 6px; }
+.console-nav::-webkit-scrollbar-track { background: var(--charcoal); }
+.console-nav::-webkit-scrollbar-thumb { border-radius: 999px; background: #4b5159; }
+.console-nav::-webkit-scrollbar-thumb:hover { background: #626973; }
+.console-nav::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .console-nav > div { margin: 13px 0 18px; }
 .console-nav > div > span { display: block; margin: 0 9px 7px; color: #69717a; font-size: 9px; font-weight: 850; letter-spacing: 0; text-transform: uppercase; }
 .console-nav button { display: flex; width: 100%; min-height: 37px; align-items: center; gap: 10px; border-radius: 5px; background: transparent; padding: 0 10px; color: #aeb5ba; font-size: 12px; font-weight: 650; text-align: left; }
