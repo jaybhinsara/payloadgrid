@@ -1,18 +1,41 @@
 import type { Metadata } from "next";
-import { Activity, CheckCircle2, Clock3, Database, ServerCog, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Gauge, LayoutDashboard, RotateCcw, Send, Server, TriangleAlert, Webhook, XCircle } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
-import { readSystemHealth, type SystemHealth } from "@/lib/health";
+import { readPublicHealth, type PublicHealth, type ServiceState } from "@/lib/health";
 
-export const metadata: Metadata = { title: "Service Status", description: "Live PayloadGrid database and delivery queue health." };
+export const metadata: Metadata = { title: "Service Status", description: "Live availability for PayloadGrid APIs, dashboard, webhook ingestion, delivery, and retries." };
 export const dynamic = "force-dynamic";
 
+function unavailableHealth(): PublicHealth {
+  return {
+    status: "outage",
+    services: { api: "outage", dashboard: "outage", inboundWebhooks: "outage", outboundDelivery: "outage", scheduledRetries: "outage" },
+    checkedAt: new Date().toISOString()
+  };
+}
+
+const services = [
+  { key: "api", title: "Public API", copy: "Message acceptance, authentication, and API responses.", icon: Server },
+  { key: "dashboard", title: "Dashboard", copy: "Workspace configuration and delivery visibility.", icon: LayoutDashboard },
+  { key: "inboundWebhooks", title: "Inbound webhooks", copy: "Provider callback acceptance and verification.", icon: Webhook },
+  { key: "outboundDelivery", title: "Outbound delivery", copy: "Signed delivery to customer destinations.", icon: Send },
+  { key: "scheduledRetries", title: "Scheduled retries", copy: "Automatic recovery for unsuccessful deliveries.", icon: RotateCcw }
+] as const;
+
+function statusCopy(status: ServiceState) {
+  if (status === "operational") return "Operational";
+  if (status === "degraded") return "Degraded performance";
+  return "Outage";
+}
+
 export default async function StatusPage() {
-  let health: SystemHealth | null = null;
-  try { health = await readSystemHealth(); } catch { health = null; }
-  const operational = health?.status === "operational";
-  return <PublicPage eyebrow="Live service status" title={operational ? "All monitored systems operational." : "Service configuration needs attention."} intro="Live checks for the database, delivery queue, and pending-event age.">
-    <section className={`status-summary ${operational ? "operational" : "degraded"}`}>{operational ? <CheckCircle2 size={26} /> : <TriangleAlert size={26} />}<div><strong>{health ? health.status : "unavailable"}</strong><span>Checked {health ? new Date(health.checkedAt).toLocaleString("en-US") : "just now"}</span></div></section>
-    <section className="status-components"><article><Database size={20} /><div><strong>PostgreSQL</strong><p>Account, configuration, queue state, and delivery evidence.</p></div><span className={health?.database === "operational" ? "ok" : "warn"}>{health?.database || "unavailable"}</span></article><article><ServerCog size={20} /><div><strong>Delivery queue</strong><p>Signed QStash jobs with a database-backed fallback.</p></div><span className={health?.deliveryQueue === "operational" ? "ok" : "warn"}>{health?.deliveryQueue || "unavailable"}</span></article><article><Activity size={20} /><div><strong>Pending deliveries</strong><p>Events waiting, processing, or scheduled for retry.</p></div><span>{health?.pendingDeliveries ?? "-"}</span></article><article><Clock3 size={20} /><div><strong>Oldest pending event</strong><p>Oldest queued event across active delivery states.</p></div><span>{health ? `${health.oldestPendingSeconds}s` : "-"}</span></article></section>
-    <section className="public-section"><span className="section-label">Service commitments</span><h2>Live health without invented guarantees.</h2><p>This page reports current component health. PayloadGrid does not currently publish long-term uptime history, and a contractual SLA applies only when agreed in writing.</p></section>
+  let health = unavailableHealth();
+  try { health = await readPublicHealth(); } catch { health = unavailableHealth(); }
+  const Icon = health.status === "operational" ? CheckCircle2 : health.status === "degraded" ? TriangleAlert : XCircle;
+  const title = health.status === "operational" ? "All monitored services operational." : health.status === "degraded" ? "Some services are experiencing delays." : "Service interruption detected.";
+  return <PublicPage eyebrow="Live service status" title={title} intro="Current availability for the PayloadGrid services customers depend on.">
+    <section className={`status-summary ${health.status}`}><Icon size={26} /><div><strong>{statusCopy(health.status)}</strong><span>Checked {new Date(health.checkedAt).toLocaleString("en-US")}</span></div></section>
+    <section className="status-components">{services.map(({ key, title: serviceTitle, copy, icon: ServiceIcon }) => { const state = health.services[key]; return <article key={key}><ServiceIcon size={20} /><div><strong>{serviceTitle}</strong><p>{copy}</p></div><span className={state === "operational" ? "ok" : state === "degraded" ? "warn" : "down"}>{statusCopy(state)}</span></article>; })}</section>
+    <section className="public-section status-methodology"><span className="section-label">Status methodology</span><h2>Customer impact, not internal configuration.</h2><p><Gauge size={17} aria-hidden="true" /> Service states are calculated from live platform connectivity and delivery backlog signals. Internal infrastructure and project-level queue diagnostics remain available only to authorized workspace operators.</p></section>
   </PublicPage>;
 }

@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { readSystemHealth } from "@/lib/health";
+import { readPublicHealth } from "@/lib/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {
-    const health = await readSystemHealth();
+    const health = await readPublicHealth();
     return NextResponse.json(health, { headers: { "cache-control": "no-store" } });
   } catch {
-    return NextResponse.json({ status: "unavailable", database: "unavailable", checkedAt: new Date().toISOString() }, { status: 503, headers: { "cache-control": "no-store" } });
+    const outage = { api: "outage", dashboard: "outage", inboundWebhooks: "outage", outboundDelivery: "outage", scheduledRetries: "outage" };
+    return NextResponse.json({ status: "outage", services: outage, checkedAt: new Date().toISOString() }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 }
