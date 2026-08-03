@@ -2,6 +2,11 @@
 
 PayloadGrid is a multi-tenant inbound and outbound webhook platform for SaaS, commerce, and developer teams worldwide. The application uses Next.js on Vercel, Neon Postgres, and Upstash QStash for durable delivery jobs.
 
+Documentation:
+
+- [Platform guide](docs/PLATFORM_GUIDE.md): concepts, dashboard modules, configuration examples, event flows, operations, and troubleshooting
+- [Architecture](docs/ARCHITECTURE.md): tenant boundaries, delivery sequences, and runtime topology
+
 ## Implemented
 
 - Email/password accounts, optional email verification, password reset, secure HTTP-only sessions
@@ -65,12 +70,12 @@ Create an Upstash QStash account and add:
 
 PayloadGrid publishes one signed job per delivery to `/api/jobs/deliver`. The worker atomically claims each database event, so QStash retries cannot create duplicate attempts. Without QStash, Vercel `after` performs best-effort delivery and the database retains queued events, but this fallback is not a production durability guarantee.
 
-Configure three protected schedules in QStash:
+Configure three protected schedules in QStash. For free-plan testing, use hourly retry recovery and monitoring to conserve message quota; production frequency should follow the required recovery target and QStash plan:
 
 ```text
 GET https://YOUR_DOMAIN/api/cron/retry-failed
 Authorization: Bearer YOUR_CRON_SECRET
-Schedule: every minute
+Schedule: hourly for free-plan testing
 
 GET https://YOUR_DOMAIN/api/cron/maintenance
 Authorization: Bearer YOUR_CRON_SECRET
@@ -78,7 +83,7 @@ Schedule: daily
 
 GET https://YOUR_DOMAIN/api/cron/monitor
 Authorization: Bearer YOUR_CRON_SECRET
-Schedule: every 5 minutes
+Schedule: hourly for free-plan testing
 ```
 
 The first route drains stranded queued/retry events. The second redacts expired payloads and removes expired sessions and rate-limit windows. The monitoring route records customer-facing service checks, opens an incident after three consecutive failures, and resolves it after two consecutive healthy checks.

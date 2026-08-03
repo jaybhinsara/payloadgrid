@@ -29,6 +29,8 @@ Every console API resolves the current session and project on the server. Resour
 
 A provider posts to `/in/:endpointId`. PayloadGrid stores the original headers and payload, derives the provider event type and ID, forwards the event to the endpoint destination with a PayloadGrid signature, and uses the same attempt/retry/alert pipeline as outbound messages.
 
-## Scaling path
+## Runtime topology and scaling path
 
-Vercel route handlers are suitable for the current MVP and early traffic. Before sustained high volume, dispatch delivery jobs to a durable queue such as QStash, Inngest, Trigger.dev, or a dedicated worker service. Neon remains the source of truth; workers should claim jobs atomically and keep all delivery operations idempotent.
+Vercel serves the Next.js control plane, public API, inbound routes, and delivery worker route. Neon is the source of truth. QStash provides durable delivery jobs, delayed retries, request verification, per-endpoint flow control, and attempt-level deduplication. Workers claim database events atomically so duplicate queue delivery cannot process one attempt concurrently.
+
+The direct Vercel `after` path is a best-effort fallback when QStash publishing is unavailable; it is not the production durability path. At sustained volume that requires continuous consumers, strict ordering, or infrastructure-independent worker availability, move the delivery worker to an always-running service while retaining the Vercel control plane and Neon state model.
