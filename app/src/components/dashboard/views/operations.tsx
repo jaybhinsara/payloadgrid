@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Activity, CheckCircle2, Clock3, Database, LoaderCircle, RefreshCw, ServerCog, TriangleAlert } from "lucide-react";
 import { SectionHead } from "@/components/dashboard/common";
+import { OperatorMonitoring } from "@/components/dashboard/views/operator-monitoring";
 
 export type OperationsHealth = {
   status: "operational" | "degraded";
@@ -20,7 +21,7 @@ function duration(seconds: number) {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 }
 
-export function OperationsView({ refreshVersion }: { refreshVersion: number }) {
+export function OperationsView({ refreshVersion, isOperator }: { refreshVersion: number; isOperator: boolean }) {
   const [health, setHealth] = useState<OperationsHealth | null>(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -45,5 +46,6 @@ export function OperationsView({ refreshVersion }: { refreshVersion: number }) {
       <section className="operations-metrics"><article><span><Activity size={18} /></span><div><small>Pending deliveries</small><strong>{health.pendingDeliveries.toLocaleString()}</strong></div></article><article><span><Clock3 size={18} /></span><div><small>Oldest pending</small><strong>{health.pendingDeliveries ? duration(health.oldestPendingSeconds) : "None"}</strong></div></article><article><span><Database size={18} /></span><div><small>Database</small><strong>{health.database}</strong></div></article><article><span><ServerCog size={18} /></span><div><small>Queue mode</small><strong>{health.deliveryQueue === "operational" ? "Durable" : "Fallback"}</strong></div></article></section>
       <section className="content-card operations-detail"><div className="card-head"><div><span className="section-label">Delivery diagnostics</span><h3>Active project</h3></div><span>Private</span></div><div className="operations-rows"><article><div><strong>PostgreSQL state</strong><p>Configuration, event state, retries, and delivery evidence.</p></div><span className="ok">Operational</span></article><article><div><strong>Delivery queue</strong><p>{health.deliveryQueue === "operational" ? "Signed durable jobs are enabled." : "Requests use direct background delivery and retain database state for recovery."}</p></div><span className={health.deliveryQueue === "operational" ? "ok" : "warn"}>{health.deliveryQueue}</span></article><article><div><strong>Latest terminal delivery</strong><p>Most recent delivered, failed, cancelled, or dead-lettered event.</p></div><span>{health.lastDeliveryAt ? new Date(health.lastDeliveryAt).toLocaleString() : "No activity"}</span></article><article><div><strong>Backlog threshold</strong><p>Attention is raised when the oldest pending event reaches five minutes.</p></div><span>{duration(health.oldestPendingSeconds)} / 5m</span></article></div></section>
     </>}
+    {isOperator ? <OperatorMonitoring refreshVersion={refreshVersion} /> : null}
   </>;
 }

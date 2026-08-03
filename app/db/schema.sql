@@ -314,3 +314,44 @@ create table if not exists alert_notifications (
   unique (rule_id, event_id)
 );
 create index if not exists alert_notifications_rule_id_idx on alert_notifications(rule_id, created_at desc);
+create table if not exists service_checks (
+  id bigserial primary key,
+  run_id uuid not null,
+  service text not null check (service in ('api','dashboard','inbound_webhooks','outbound_delivery','scheduled_retries')),
+  status text not null check (status in ('operational','degraded','outage')),
+  latency_ms integer not null default 0,
+  response_status integer,
+  error text,
+  metadata jsonb not null default '{}'::jsonb,
+  checked_at timestamptz not null default now(),
+  unique (run_id, service)
+);
+
+create table if not exists incidents (
+  id uuid primary key default gen_random_uuid(),
+  service text not null check (service in ('api','dashboard','inbound_webhooks','outbound_delivery','scheduled_retries')),
+  status text not null default 'investigating' check (status in ('investigating','identified','monitoring','resolved')),
+  severity text not null check (severity in ('degraded','outage')),
+  title text not null,
+  summary text not null,
+  started_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  created_by uuid references users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists incident_updates (
+  id uuid primary key default gen_random_uuid(),
+  incident_id uuid not null references incidents(id) on delete cascade,
+  status text not null check (status in ('investigating','identified','monitoring','resolved')),
+  message text not null,
+  created_by uuid references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists service_checks_service_checked_at_idx on service_checks(service, checked_at desc);
+create index if not exists service_checks_run_checked_at_idx on service_checks(run_id, checked_at desc);
+create index if not exists incidents_started_at_idx on incidents(started_at desc);
+create unique index if not exists incidents_one_open_per_service_idx on incidents(service) where status <> 'resolved';
+create index if not exists incident_updates_incident_created_at_idx on incident_updates(incident_id, created_at asc);

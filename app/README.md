@@ -50,7 +50,8 @@ Set the Vercel Root Directory to `app`. Add these Production and Preview variabl
 - `PAYLOADGRID_APP_URL`: same public URL for server-generated links and queue callbacks (`https://payloadgrid.vercel.app` in production)
 - `NEXT_PUBLIC_SUPPORT_EMAIL`: public support address
 - `PAYLOADGRID_ENCRYPTION_KEY`: stable 32-byte base64 or 64-character hex key
-- `CRON_SECRET`: independent random secret for protected maintenance and fallback routes
+- `CRON_SECRET`: independent random secret for protected maintenance and monitoring routes
+- `PAYLOADGRID_OPERATOR_EMAILS`: comma-separated accounts allowed to manage platform incidents
 
 Run `app/db/schema.sql` in Neon before deploying code that uses the new columns.
 
@@ -64,7 +65,7 @@ Create an Upstash QStash account and add:
 
 PayloadGrid publishes one signed job per delivery to `/api/jobs/deliver`. The worker atomically claims each database event, so QStash retries cannot create duplicate attempts. Without QStash, Vercel `after` performs best-effort delivery and the database retains queued events, but this fallback is not a production durability guarantee.
 
-Configure two protected schedules in QStash:
+Configure three protected schedules in QStash:
 
 ```text
 GET https://YOUR_DOMAIN/api/cron/retry-failed
@@ -74,9 +75,13 @@ Schedule: every minute
 GET https://YOUR_DOMAIN/api/cron/maintenance
 Authorization: Bearer YOUR_CRON_SECRET
 Schedule: daily
+
+GET https://YOUR_DOMAIN/api/cron/monitor
+Authorization: Bearer YOUR_CRON_SECRET
+Schedule: every 5 minutes
 ```
 
-The first route drains stranded queued/retry events. The second redacts expired payloads and removes expired sessions and rate-limit windows.
+The first route drains stranded queued/retry events. The second redacts expired payloads and removes expired sessions and rate-limit windows. The monitoring route records customer-facing service checks, opens an incident after three consecutive failures, and resolves it after two consecutive healthy checks.
 
 ## Transactional email
 
@@ -91,6 +96,8 @@ Optional alert variables:
 
 - `PAYLOADGRID_ALERT_FROM`
 - `RESEND_API_KEY`
+- `PAYLOADGRID_INCIDENT_ALERT_TO`: comma-separated incident email recipients
+- `PAYLOADGRID_INCIDENT_ALERT_WEBHOOK`: optional HTTPS incident notification destination
 
 ## Public API
 

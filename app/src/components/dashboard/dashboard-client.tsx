@@ -85,7 +85,7 @@ export function DashboardClient() {
       {view === "deliveries" ? <DeliveriesView initialEvents={data.events} endpoints={data.endpoints} inspect={setSelectedEvent} replay={replayDelivery} mutate={mutate} refreshVersion={lastRefresh?.getTime() || 0} /> : null}
       {view === "event-types" ? <EventTypesView data={data} busy={busy} submit={submit} /> : null}
       {view === "workspace" ? <WorkspaceView data={data} busy={busy} submit={submit} mutate={mutate} switchOrganization={switchOrganization} switchProject={switchProject} /> : null}
-      {view === "operations" && ["owner", "admin"].includes(data.context.organization.role) ? <OperationsView refreshVersion={lastRefresh?.getTime() || 0} /> : null}
+      {view === "operations" && ["owner", "admin"].includes(data.context.organization.role) ? <OperationsView refreshVersion={lastRefresh?.getTime() || 0} isOperator={data.system.operator} /> : null}
       {view === "api-keys" ? <ApiKeysView data={data} busy={busy} submit={submit} revoke={(id) => { void mutate(`/api/api-keys/${id}`, undefined, "DELETE"); }} reveal={setNewToken} /> : null}
       {view === "team" ? <TeamView data={data} busy={busy} submit={submit} reveal={setInviteToken} mutate={mutate} /> : null}
       {view === "usage" ? <UsageView data={data} /> : null}
