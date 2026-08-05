@@ -14,6 +14,7 @@
     "@neondatabase/serverless": "latest",
     "@upstash/qstash": "^2.11.3",
     "@vercel/analytics": "^2.0.1",
+    "jose": "^6.2.8",
     "lucide-react": "^1.28.0",
     "next": "latest",
     "react": "latest",

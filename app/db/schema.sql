@@ -4,7 +4,7 @@ create table if not exists users (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
   name text not null,
-  password_hash text not null,
+  password_hash text,
   email_verified_at timestamptz,
   verification_required boolean not null default false,
   created_at timestamptz not null default now(),
@@ -12,6 +12,37 @@ create table if not exists users (
 );
 
 alter table users add column if not exists verification_required boolean not null default false;
+alter table users alter column password_hash drop not null;
+
+create table if not exists oauth_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  provider text not null check (provider in ('google', 'github')),
+  provider_user_id text not null,
+  email_at_linking text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (provider, provider_user_id),
+  unique (user_id, provider)
+);
+
+create table if not exists oauth_states (
+  state_hash text primary key,
+  provider text not null check (provider in ('google', 'github')),
+  code_verifier text,
+  nonce text not null,
+  invitation_id uuid,
+  return_to text not null default '/dashboard',
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+alter table oauth_states add column if not exists invitation_id uuid;
+alter table oauth_states drop column if exists invite_token;
+alter table oauth_accounts drop constraint if exists oauth_accounts_provider_check;
+alter table oauth_accounts add constraint oauth_accounts_provider_check check (provider in ('google', 'github'));
+alter table oauth_states drop constraint if exists oauth_states_provider_check;
+alter table oauth_states add constraint oauth_states_provider_check check (provider in ('google', 'github'));
 
 create table if not exists auth_tokens (
   id uuid primary key default gen_random_uuid(),
@@ -272,6 +303,8 @@ with duplicate_pending_invitations as (
 delete from organization_invitations
 where id in (select id from duplicate_pending_invitations where duplicate_rank > 1);
 create unique index if not exists organization_invitations_pending_email_idx on organization_invitations(organization_id, email) where accepted_at is null;
+create index if not exists oauth_accounts_user_id_idx on oauth_accounts(user_id);
+create index if not exists oauth_states_expires_at_idx on oauth_states(expires_at);
 create index if not exists sessions_token_hash_idx on sessions(token_hash);
 create index if not exists auth_tokens_expiry_idx on auth_tokens(expires_at) where used_at is null;
 create index if not exists sessions_expires_at_idx on sessions(expires_at);

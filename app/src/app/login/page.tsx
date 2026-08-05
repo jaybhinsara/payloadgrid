@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AuthForm } from "@/components/auth-form";
+import { configuredOAuthProviders } from "@/lib/oauth";
+
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
-export default function LoginPage() { return <Suspense><AuthForm mode="login" /></Suspense>; }
+
+export default function LoginPage() {
+  return <Suspense><AuthForm mode="login" providers={configuredOAuthProviders()} /></Suspense>;
+}

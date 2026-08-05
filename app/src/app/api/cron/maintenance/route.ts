@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     await sql`delete from api_usage_windows where window_start < now() - interval '2 days'`;
     await sql`delete from endpoint_usage_windows where window_start < now() - interval '2 days'`;
     await sql`delete from sessions where expires_at <= now()`;
+    await sql`delete from oauth_states where expires_at <= now()`;
     return NextResponse.json({ ok: true, redactedEvents: expired.length });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Maintenance failed" }, { status: 500 });

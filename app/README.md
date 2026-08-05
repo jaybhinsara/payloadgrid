@@ -9,7 +9,7 @@ Documentation:
 
 ## Implemented
 
-- Email/password accounts, optional email verification, password reset, secure HTTP-only sessions
+- Email/password and optional Google and GitHub accounts, email verification, password reset, secure HTTP-only sessions
 - Organizations, roles, projects, applications, team invitations, and tenant-scoped queries
 - Hashed API keys, idempotent message acceptance, event subscriptions, and transformations
 - Durable asynchronous delivery jobs with atomic database claiming and a Vercel `after` fallback
@@ -59,6 +59,26 @@ Set the Vercel Root Directory to `app`. Add these Production and Preview variabl
 - `PAYLOADGRID_OPERATOR_EMAILS`: comma-separated accounts allowed to manage platform incidents
 
 Run `app/db/schema.sql` in Neon before deploying code that uses the new columns.
+
+## OAuth sign-in
+
+OAuth is optional and appears on the sign-in and signup pages only when a provider's complete environment configuration is present. Apply `db/schema.sql` before enabling any provider.
+
+Register these exact production callback URLs:
+
+```text
+https://payloadgrid.vercel.app/api/auth/oauth/google/callback
+https://payloadgrid.vercel.app/api/auth/oauth/github/callback
+```
+
+Then configure:
+
+- Google: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+- GitHub: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
+
+For local testing, register the corresponding `http://localhost:3200/api/auth/oauth/PROVIDER/callback` URL in a separate development app. Never prefix these server-only variables with `NEXT_PUBLIC_`.
+
+PayloadGrid verifies provider identity tokens or verified email records, binds the provider's stable account ID to one user, and then issues the same PayloadGrid HTTP-only session used by password login. OAuth signup also creates the first workspace or accepts a matching pending invitation.
 
 ## Durable queue
 

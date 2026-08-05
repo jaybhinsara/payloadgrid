@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   try {
     const sql = requireSql(); const body = schema.parse(await request.json());
     const [user] = await sql`select id, email, password_hash, email_verified_at, verification_required from users where email = ${body.email.toLowerCase()} limit 1`;
-    if (!user || !(await verifyPassword(body.password, String(user.password_hash)))) return NextResponse.json({ ok: false, error: "Email or password is incorrect" }, { status: 401 });
+    if (!user || !user.password_hash || !(await verifyPassword(body.password, String(user.password_hash)))) return NextResponse.json({ ok: false, error: "Email or password is incorrect" }, { status: 401 });
     if (user.verification_required && !user.email_verified_at) {
       const token = await createAuthToken(String(user.id), "verify_email", 24); await sendAuthEmail(String(user.email), "verify_email", token);
       return NextResponse.json({ ok: false, error: "Verify your email before signing in. We sent a new verification link." }, { status: 403 });
