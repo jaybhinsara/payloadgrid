@@ -17,7 +17,15 @@ export const metadata: Metadata = {
   creator: "PayloadGrid",
   publisher: "PayloadGrid",
   category: "developer tools",
-  icons: { icon: "/icon.svg" },
+  icons: {
+      icon: [
+        {
+          url: "/icon.svg",
+          sizes: "any",
+          type: "image/svg+xml",
+        },
+      ],
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
