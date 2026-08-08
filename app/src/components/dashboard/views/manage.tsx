@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { ArrowRight, BellRing, FileClock, GripVertical, KeyRound, LoaderCircle, Pause, Pencil, Play, Plus, Send, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowRight, BellRing, ChevronLeft, ChevronRight, FileClock, GripVertical, KeyRound, LoaderCircle, Pause, Pencil, Play, Plus, Send, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
 import { Empty, SectionHead, timeAgo } from "@/components/dashboard/common";
 import type { DashboardData, DashboardMutate, DashboardSubmit } from "@/components/dashboard/types";
 
@@ -69,9 +69,36 @@ export function AutomationsView({ data, busy, submit, mutate }: { data: Dashboar
     </section>
     {testResult ? <div className="automation-result"><BellRing size={15} />{testResult}<button onClick={() => setTestResult("")} aria-label="Dismiss test result"><X size={14} /></button></div> : null}
     <NotificationHistory data={data} />
-    <section className="content-card audit-card"><div className="card-head"><div><span className="section-label">Security history</span><h3>Audit log</h3></div></div>{data.auditLogs.length ? <div className="audit-list">{data.auditLogs.map((log) => <div key={log.id}><span className="audit-dot" /><strong>{log.action.replaceAll(".", " ")}</strong><small>{log.resource_type}{log.resource_id ? ` · ${log.resource_id.slice(0, 12)}` : ""}</small><time>{timeAgo(log.created_at)}</time></div>)}</div> : <Empty icon={<FileClock size={21} />} title="No audit activity" copy="Organization changes will be recorded here." />}</section>
+    <AuditLog initialLogs={data.auditLogs} organizationId={data.context.organization.id} />
     {editing ? <AutomationEditor selection={editing} mutate={mutate} close={() => setEditing(null)} /> : null}
   </>;
+}
+
+type AuditEntry = DashboardData["auditLogs"][number] & { actor_name?: string | null; actor_email?: string | null; metadata?: Record<string, unknown> };
+
+function AuditLog({ initialLogs, organizationId }: { initialLogs: DashboardData["auditLogs"]; organizationId: string }) {
+  const [logs, setLogs] = useState<AuditEntry[]>(initialLogs.slice(0, 25));
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [total, setTotal] = useState(initialLogs.length);
+  const [pages, setPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true); setError("");
+    fetch(`/api/audit-logs?page=${page}&limit=${limit}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || "Could not load audit history"); return payload; })
+      .then((payload) => { setLogs(payload.logs || []); setTotal(Number(payload.pagination?.total || 0)); setPages(Number(payload.pagination?.pages || 1)); })
+      .catch((cause) => { if (cause instanceof Error && cause.name !== "AbortError") setError(cause.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [organizationId, page, limit]);
+
+  const first = total ? (page - 1) * limit + 1 : 0;
+  const last = Math.min(page * limit, total);
+  return <section className="content-card audit-card"><div className="card-head audit-head"><div><span className="section-label">Security history</span><h3>Audit log</h3></div><div className="audit-page-size"><label htmlFor="audit-page-size">Rows</label><select id="audit-page-size" value={limit} onChange={(event) => { setLimit(Number(event.target.value)); setPage(1); }}><option value="25">25</option><option value="50">50</option><option value="75">75</option><option value="100">100</option></select>{loading ? <LoaderCircle className="spin" size={15} /> : null}</div></div>{error ? <div className="inline-error">{error}</div> : null}{logs.length ? <div className="audit-list">{logs.map((log) => <div key={log.id}><span className="audit-dot" /><strong>{log.action.replaceAll(".", " ")}</strong><small>{log.resource_type}{log.resource_id ? ` · ${log.resource_id.slice(0, 12)}` : ""}{log.actor_name ? ` · ${log.actor_name}` : ""}</small><time title={new Date(log.created_at).toLocaleString()}>{timeAgo(log.created_at)}</time></div>)}</div> : !loading ? <Empty icon={<FileClock size={21} />} title="No audit activity" copy="Organization changes will be recorded here." /> : null}<footer className="audit-pagination"><span>{first}-{last} of {total}</span><strong>Page {page} of {pages}</strong><div><button className="icon-button" disabled={loading || page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} title="Previous audit page"><ChevronLeft size={16} /></button><button className="icon-button" disabled={loading || page >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))} title="Next audit page"><ChevronRight size={16} /></button></div></footer></section>;
 }
 
 function SchemaMapper({ submit, busy }: { submit: DashboardSubmit; busy: string }) {
