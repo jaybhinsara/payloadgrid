@@ -5,7 +5,7 @@ import { Activity, Braces, ChevronLeft, ChevronRight, Eye, MessageSquareText, Pl
 import { Empty, SectionHead, Status, timeAgo } from "@/components/dashboard/common";
 import type { DashboardData, DashboardMutate, DashboardSubmit, EventRow } from "@/components/dashboard/types";
 
-const REPLAYABLE_STATUSES = new Set(["delivered", "failed", "dead_letter", "cancelled"]);
+const REPLAYABLE_STATUSES = new Set(["delivered", "failed", "dead_letter", "resolved", "cancelled"]);
 
 export function MessagesView({ data, busy, submit }: { data: DashboardData; busy: string; submit: DashboardSubmit }) {
   const appName = (id: string) => data.applications.find((app) => app.id === id)?.name || "Application";
@@ -74,7 +74,7 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
     {error ? <div className="inline-error">{error}</div> : null}
     <section className="delivery-filters" aria-label="Delivery filters">
       <div className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search event or endpoint" /></div>
-      <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option>{["queued", "processing", "retrying", "delivered", "failed", "dead_letter", "cancelled", "received"].map((value) => <option key={value} value={value}>{value.replace("_", " ")}</option>)}</select>
+      <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option>{["queued", "processing", "retrying", "delivered", "failed", "dead_letter", "resolved", "cancelled", "received"].map((value) => <option key={value} value={value}>{value.replace("_", " ")}</option>)}</select>
       <select aria-label="Filter by direction" value={direction} onChange={(event) => setDirection(event.target.value)}><option value="all">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
       <select aria-label="Filter by endpoint" value={endpointId} onChange={(event) => setEndpointId(event.target.value)}><option value="all">All endpoints</option>{endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}</select>
 

@@ -14,7 +14,7 @@ export async function scheduleReplay(target: ReplayTarget) {
   const attempt = Number(target.attempt_count || 0) + 1;
   await sql`
     update webhook_events set status = 'queued', locked_at = null, next_retry_at = null,
-      cancelled_at = null, dead_lettered_at = null,
+      cancelled_at = null, dead_lettered_at = null, resolved_at = null, resolved_by = null, resolution_note = null,
       max_retries = greatest(max_retries, ${attempt + 1}), updated_at = now()
     where id = ${target.id}
   `;

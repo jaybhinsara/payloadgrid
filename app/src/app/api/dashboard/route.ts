@@ -25,12 +25,14 @@ export async function GET() {
       `,
       sql`
         select e.id, e.endpoint_id, ep.name as endpoint_name, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
-          e.event_type, e.status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
+          e.event_type, case when e.status = 'dead_letter' and e.resolved_at is not null then 'resolved' else e.status end as status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
           e.request_content_type, e.is_simulation, e.parent_event_id,
           e.retry_count, e.max_retries, e.next_retry_at, e.last_error, e.cancelled_at, e.dead_lettered_at,
+          e.resolved_at, e.resolution_note, resolver.name as resolved_by_name,
           coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
         from webhook_events e
         join endpoints ep on ep.id = e.endpoint_id
+        left join users resolver on resolver.id = e.resolved_by
         left join lateral (
           select latest.response_status, latest.response_body, latest.latency_ms, latest.error,
             (select count(*)::int from delivery_attempts counted where counted.event_id = e.id) as attempt_count
@@ -60,9 +62,9 @@ export async function GET() {
           count(*) filter (where status in ('delivered','failed','dead_letter'))::text as terminal_events,
           count(*) filter (where status in ('queued','buffered'))::text as queued_events,
           count(*) filter (where status = 'processing')::text as processing_events,
-          count(*) filter (where status in ('failed','dead_letter'))::text as failed_events,
+          count(*) filter (where status = 'failed' or (status = 'dead_letter' and resolved_at is null))::text as failed_events,
           count(*) filter (where status = 'retrying')::text as retrying_events,
-          count(*) filter (where status = 'dead_letter')::text as dead_lettered_events,
+          count(*) filter (where status = 'dead_letter' and resolved_at is null)::text as dead_lettered_events,
           count(*) filter (where status = 'delivered')::text as delivered_events,
           min(received_at) filter (where status in ('queued','buffered','processing','received','retrying')) as oldest_pending_at,
           coalesce((
@@ -71,7 +73,7 @@ export async function GET() {
               select risky.revenue_currency as currency, sum(risky.revenue_at_risk) as amount
               from webhook_events risky
               where risky.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
-                and risky.status <> 'delivered' and risky.is_simulation = false and risky.revenue_currency is not null and risky.revenue_at_risk > 0
+                and risky.status <> 'delivered' and risky.resolved_at is null and risky.is_simulation = false and risky.revenue_currency is not null and risky.revenue_at_risk > 0
               group by risky.revenue_currency
             ) risk
           ), '[]'::jsonb) as revenue_at_risk,

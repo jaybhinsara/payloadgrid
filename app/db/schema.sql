@@ -214,6 +214,9 @@ alter table webhook_events add column if not exists payload_expires_at timestamp
 alter table webhook_events add column if not exists payload_redacted_at timestamptz;
 alter table webhook_events add column if not exists cancelled_at timestamptz;
 alter table webhook_events add column if not exists dead_lettered_at timestamptz;
+alter table webhook_events add column if not exists resolved_at timestamptz;
+alter table webhook_events add column if not exists resolved_by uuid references users(id) on delete set null;
+alter table webhook_events add column if not exists resolution_note text;
 alter table webhook_events add column if not exists request_content_type text not null default 'application/json';
 alter table webhook_events add column if not exists request_raw_body text;
 alter table webhook_events add column if not exists is_simulation boolean not null default false;

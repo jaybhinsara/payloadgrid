@@ -122,6 +122,8 @@ function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { eve
   const [actionBusy, setActionBusy] = useState("");
   const [detailError, setDetailError] = useState("");
   const [simulationOpen, setSimulationOpen] = useState(false);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [resolutionNote, setResolutionNote] = useState("");
   const [simulationPayload, setSimulationPayload] = useState(JSON.stringify(event.request_body, null, 2));
   const [simulationHeaders, setSimulationHeaders] = useState(JSON.stringify(event.request_headers || {}, null, 2));
   useEffect(() => {
@@ -150,17 +152,25 @@ function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { eve
     } catch (cause) { setDetailError(cause instanceof Error ? cause.message : "Simulation input is invalid JSON"); }
     finally { setActionBusy(""); }
   }
+  async function resolveDeadLetter() {
+    setActionBusy("resolve"); setDetailError("");
+    const result = await mutate(`/api/events/${event.id}/resolve`, { note: resolutionNote });
+    setActionBusy("");
+    if (result) close();
+  }
   const pending = ["queued", "buffered", "received", "retrying"].includes(event.status);
-  const replayable = ["delivered", "failed", "dead_letter", "cancelled"].includes(event.status);
+  const replayable = ["delivered", "failed", "dead_letter", "resolved", "cancelled"].includes(event.status);
   return <div className="drawer-backdrop" onMouseDown={close}><aside className="event-drawer" onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}><header><div><span className="section-label">Delivery inspection</span><h2>{event.event_type}</h2><p>{event.id}</p></div><button className="icon-button" onClick={close} aria-label="Close delivery"><X size={19} /></button></header>
     <div className="drawer-summary"><div><span>Status</span><Status value={event.status} /></div><div><span>Endpoint</span><strong>{event.endpoint_name || endpointName(event.endpoint_id)}</strong></div><div><span>Response</span><strong>{event.response_status ? `HTTP ${event.response_status}` : "No response"}</strong></div><div><span>Latency</span><strong>{event.latency_ms || 0}ms</strong></div><div><span>Attempts</span><strong>{event.attempt_count}/{event.max_retries}</strong></div><div><span>Direction</span><strong>{event.direction}</strong></div></div>
     {event.next_retry_at ? <div className="retry-notice"><RefreshCw size={16} /> Next retry {new Date(event.next_retry_at).toLocaleString()}</div> : null}
+    {event.resolved_at ? <div className="resolution-notice"><CircleCheck size={17} /><div><strong>Manually resolved</strong><span>{event.resolved_by_name || "Workspace operator"} · {new Date(event.resolved_at).toLocaleString()}</span>{event.resolution_note ? <p>{event.resolution_note}</p> : null}</div></div> : null}
     {detailError ? <div className="inline-error drawer-error">{detailError}</div> : null}
     <section className="attempt-section"><div className="attempt-heading"><div><span className="section-label">Attempt history</span><h3>{attempts.length} delivery attempts</h3></div>{loading ? <LoaderCircle className="spin" size={17} /> : null}</div>{attempts.length ? <div className="attempt-timeline">{attempts.map((attempt) => <AttemptRow key={attempt.id} attempt={attempt} />)}</div> : !loading ? <p className="attempt-empty">No destination attempt has run yet.</p> : null}</section>
     <DrawerCode title="Original payload" value={JSON.stringify(event.request_body, null, 2)} copy={copy} />
     <DrawerCode title="Original request headers" value={JSON.stringify(event.request_headers, null, 2)} copy={copy} />
     {simulationOpen ? <section className="simulation-editor"><div><span className="section-label">Replay sandbox</span><button className="icon-button" onClick={() => setSimulationOpen(false)} aria-label="Close simulation"><X size={14} /></button></div><p>Edit a copy. This creates a separate test delivery and does not change production health metrics.</p><label>JSON payload<textarea className="code-input" value={simulationPayload} onChange={(change) => setSimulationPayload(change.target.value)} /></label><label>Request headers<textarea className="code-input small" value={simulationHeaders} onChange={(change) => setSimulationHeaders(change.target.value)} /></label><button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void simulate()}><Beaker size={16} /> Run simulation</button></section> : null}
-    <footer><button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => setSimulationOpen(true)}><Beaker size={16} /> Simulate</button>{pending ? <button className="button danger" disabled={Boolean(actionBusy)} onClick={() => void run("cancel")}><Ban size={16} /> Cancel retry</button> : null}{event.status === "failed" ? <button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => void run("dead-letter")}><ArchiveX size={16} /> Move to dead letter</button> : null}{replayable ? <button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void run("replay")}><RotateCcw size={16} /> Replay delivery</button> : null}</footer>
+    {resolutionOpen ? <section className="resolution-editor"><div><span className="section-label">Resolve dead letter</span><button className="icon-button" onClick={() => setResolutionOpen(false)} aria-label="Close resolution"><X size={14} /></button></div><p>This removes the delivery from the active dead-letter queue but keeps its payload, attempts, and resolution evidence in history.</p><label>Resolution note <small>Optional</small><textarea maxLength={1000} value={resolutionNote} onChange={(change) => setResolutionNote(change.target.value)} placeholder="Accepted manually, destination retired, duplicate event…" /></label><button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void resolveDeadLetter()}><CircleCheck size={16} /> Resolve and archive</button></section> : null}
+    <footer><button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => setSimulationOpen(true)}><Beaker size={16} /> Simulate</button>{pending ? <button className="button danger" disabled={Boolean(actionBusy)} onClick={() => void run("cancel")}><Ban size={16} /> Cancel retry</button> : null}{event.status === "failed" ? <button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => void run("dead-letter")}><ArchiveX size={16} /> Move to dead letter</button> : null}{event.status === "dead_letter" && !event.resolved_at ? <button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => setResolutionOpen(true)}><CircleCheck size={16} /> Resolve</button> : null}{replayable ? <button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void run("replay")}><RotateCcw size={16} /> Replay delivery</button> : null}</footer>
   </aside></div>;
 }
 
