@@ -1,9 +1,11 @@
 import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { amountFromPayload, eventTypeFromPayload, providerEventIdFromPayload, safeCapturedHeaders, type Provider } from "@/lib/constants";
+import { evaluateCircuitBreaker, notifyCircuitOpened } from "@/lib/circuit-breaker";
 import { requireSql } from "@/lib/db";
 import { processDelivery } from "@/lib/delivery-worker";
 import { enforceInboundRateLimit, enforceMonthlyMessageLimit, UsageLimitError } from "@/lib/limits";
+import { parseInboundBody } from "@/lib/inbound-content";
 import { verifyProviderWebhook } from "@/lib/provider-verification";
 import { enqueueDelivery, queueConfigured } from "@/lib/queue";
 
@@ -21,7 +23,8 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const sql = requireSql();
     const [endpoint] = await sql`
       select id, project_id, application_id, provider, destination_url, is_active, provider_secret_encrypted,
-        provider_verification_required, rate_limit_per_minute
+        provider_verification_required, rate_limit_per_minute, circuit_breaker_enabled,
+        circuit_breaker_threshold, circuit_state, name
       from endpoints where id = ${endpointId} and deleted_at is null limit 1
     `;
     if (!endpoint?.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive PayloadGrid endpoint" }, { status: 404 });
@@ -30,20 +33,30 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const provider = String(endpoint.provider) as Provider;
     const verification = verifyProviderWebhook(provider, rawBody, request.headers, endpoint.provider_secret_encrypted ? String(endpoint.provider_secret_encrypted) : null);
     if (endpoint.provider_verification_required && !verification.verified) return NextResponse.json({ ok: false, error: verification.error || "Provider signature verification failed" }, { status: 401 });
-    let payload: unknown;
-    try { payload = rawBody ? JSON.parse(rawBody) : {}; }
-    catch { return NextResponse.json({ ok: false, error: "Webhook body must be valid JSON" }, { status: 400 }); }
+    let parsed;
+    try { parsed = parseInboundBody(rawBody, request.headers.get("content-type")); }
+    catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Webhook body could not be parsed" }, { status: 400 }); }
+    const payload = parsed.payload;
     const eventType = eventTypeFromPayload(payload, provider, request.headers);
     const providerEventId = providerEventIdFromPayload(payload, provider, request.headers);
     const revenue = amountFromPayload(payload, provider);
     const headers = safeCapturedHeaders(request.headers);
+    const circuit = await evaluateCircuitBreaker({
+      id: String(endpoint.id), projectId: String(endpoint.project_id), name: String(endpoint.name),
+      enabled: Boolean(endpoint.circuit_breaker_enabled), threshold: Number(endpoint.circuit_breaker_threshold), state: String(endpoint.circuit_state)
+    });
+    if (circuit.newlyOpened) after(() => notifyCircuitOpened({ id: String(endpoint.id), projectId: String(endpoint.project_id), name: String(endpoint.name), enabled: true, threshold: Number(endpoint.circuit_breaker_threshold), state: "open" }, Number(circuit.current || 0)));
+    const initialStatus = circuit.open ? "buffered" : "queued";
     const [event] = await sql`
-      insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type, request_headers, request_body, status, revenue_amount, revenue_currency, max_retries)
-      values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType}, ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, 'queued', ${revenue.amount}, ${revenue.currency}, 6)
+      insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type,
+        request_headers, request_body, request_content_type, request_raw_body, status, revenue_amount, revenue_currency, max_retries)
+      values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType},
+        ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, ${parsed.contentType}, ${parsed.rawBody}, ${initialStatus}, ${revenue.amount}, ${revenue.currency}, 6)
       on conflict (endpoint_id, provider_event_id) where provider_event_id is not null do nothing
       returning id
     `;
     if (!event) return NextResponse.json({ ok: true, duplicate: true, status: "accepted" }, { status: 200 });
+    if (circuit.open) return NextResponse.json({ ok: true, eventId: event.id, status: "buffered", circuitOpen: true }, { status: 202, headers: { "x-payloadgrid-event-id": String(event.id) } });
     let scheduled = false;
     try {
       const queued = await enqueueDelivery({ eventId: String(event.id), endpointId: String(endpoint.id), attempt: 1, rateLimitPerMinute: Number(endpoint.rate_limit_per_minute) });

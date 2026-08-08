@@ -1,0 +1,24 @@
+import type { Metadata } from "next";
+import { verifyEmbedToken } from "@/lib/embed";
+import { requireSql } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Delivery history", robots: { index: false, follow: false }, referrer: "no-referrer" };
+
+export default async function EmbeddedDeliveries({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
+  const token = (await searchParams).token || "";
+  const claims = verifyEmbedToken(token);
+  if (!claims) return <main className="embed-shell"><section className="embed-error"><h1>Link expired</h1><p>Request a fresh delivery-history link from the host application.</p></section></main>;
+  const sql = requireSql();
+  const [application] = await sql`select name from applications where id = ${claims.applicationId} and project_id = ${claims.projectId} limit 1`;
+  if (!application) return <main className="embed-shell"><section className="embed-error"><h1>Application unavailable</h1></section></main>;
+  const events = await sql`
+    select e.id, e.event_type, e.status, e.is_simulation, e.received_at, ep.name as endpoint_name,
+      latest.response_status, latest.latency_ms
+    from webhook_events e join endpoints ep on ep.id = e.endpoint_id
+    left join lateral (select response_status, latency_ms from delivery_attempts where event_id = e.id order by created_at desc limit 1) latest on true
+    where ep.project_id = ${claims.projectId} and e.application_id = ${claims.applicationId}
+    order by e.received_at desc limit 50
+  `;
+  return <main className="embed-shell"><header><div><span>PAYLOADGRID DELIVERY HISTORY</span><h1>{String(application.name)}</h1></div><i>Live evidence</i></header><div className="embed-table"><div className="embed-row embed-head"><span>Event</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Received</span></div>{events.map((event) => <div className="embed-row" key={String(event.id)}><span><strong>{String(event.event_type)}</strong><small>{String(event.id).slice(0, 12)}{event.is_simulation ? " · simulation" : ""}</small></span><span>{String(event.endpoint_name)}</span><span><i className={`embed-status ${String(event.status)}`}>{String(event.status).replaceAll("_", " ")}</i></span><span>{event.response_status ? `HTTP ${event.response_status} · ${event.latency_ms || 0}ms` : "Pending"}</span><time>{new Date(String(event.received_at)).toLocaleString()}</time></div>)}</div></main>;
+}

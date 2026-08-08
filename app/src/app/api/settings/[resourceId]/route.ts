@@ -14,7 +14,8 @@ const transformationSchema = z.object({
   config: z.object({
     addFields: z.record(z.string(), z.unknown()).optional(),
     removeFields: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
-    renameFields: z.record(z.string(), z.string()).optional()
+    renameFields: z.record(z.string(), z.string()).optional(),
+    mappings: z.array(z.object({ from: z.string().trim().min(1).max(160), to: z.string().trim().min(1).max(160) })).max(50).optional()
   }),
   isActive: z.boolean()
 });

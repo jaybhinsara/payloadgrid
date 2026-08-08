@@ -12,8 +12,8 @@ export type SessionContext = {
   user: { id: string; name: string; email: string };
   organization: { id: string; name: string; slug: string; plan: string; role: string };
   organizations: Array<{ id: string; name: string; role: string }>;
-  project: { id: string; name: string; slug: string; environment: string };
-  projects: Array<{ id: string; name: string; slug: string; environment: string }>;
+  project: { id: string; name: string; slug: string; environment: string; payloadRetentionMode: "standard" | "transient" };
+  projects: Array<{ id: string; name: string; slug: string; environment: string; payloadRetentionMode: "standard" | "transient" }>;
 };
 export class AuthenticationError extends Error { status = 401; }
 export class AuthorizationError extends Error { status = 403; }
@@ -49,7 +49,7 @@ export async function getSessionContext(): Promise<SessionContext | null> {
   const sql = requireSql();
   const rows = await sql`
     select u.id as user_id, u.name as user_name, u.email, o.id as organization_id, o.name as organization_name,
-      o.slug as organization_slug, o.plan, om.role, p.id as project_id, p.name as project_name, p.slug as project_slug, p.environment
+      o.slug as organization_slug, o.plan, om.role, p.id as project_id, p.name as project_name, p.slug as project_slug, p.environment, p.payload_retention_mode
     from sessions s join users u on u.id = s.user_id join organization_members om on om.user_id = u.id
     join organizations o on o.id = om.organization_id join projects p on p.organization_id = o.id
     where s.token_hash = ${sha256(token)} and s.expires_at > now()
@@ -62,12 +62,12 @@ export async function getSessionContext(): Promise<SessionContext | null> {
   const requestedProject = store.get(ACTIVE_PROJECT_COOKIE)?.value;
   const row = availableRows.find((item) => String(item.project_id) === requestedProject) || availableRows[0];
   const organizations = Array.from(new Map(rows.map((item) => [String(item.organization_id), { id: String(item.organization_id), name: String(item.organization_name), role: String(item.role) }])).values());
-  const projects = availableRows.map((item) => ({ id: String(item.project_id), name: String(item.project_name), slug: String(item.project_slug), environment: String(item.environment) }));
+  const projects = availableRows.map((item) => ({ id: String(item.project_id), name: String(item.project_name), slug: String(item.project_slug), environment: String(item.environment), payloadRetentionMode: String(item.payload_retention_mode) as "standard" | "transient" }));
   return {
     user: { id: String(row.user_id), name: String(row.user_name), email: String(row.email) },
     organization: { id: String(row.organization_id), name: String(row.organization_name), slug: String(row.organization_slug), plan: String(row.plan), role: String(row.role) },
     organizations,
-    project: { id: String(row.project_id), name: String(row.project_name), slug: String(row.project_slug), environment: String(row.environment) },
+    project: { id: String(row.project_id), name: String(row.project_name), slug: String(row.project_slug), environment: String(row.environment), payloadRetentionMode: String(row.payload_retention_mode) as "standard" | "transient" },
     projects
   };
 }

@@ -13,16 +13,18 @@ export type DeliveryResult = {
 
 export type DeliveryMode = "forward" | "replay" | "retry" | "outbound";
 export type SigningContext = { secret: string; deliveryId: string };
+export type DeliveryContent = { rawBody?: string | null; contentType?: string | null };
 
 export async function deliverWebhook(
   destinationUrl: string,
   payload: unknown,
   mode: DeliveryMode,
   extraHeaders: Record<string, string> = {},
-  signing?: SigningContext
+  signing?: SigningContext,
+  content?: DeliveryContent
 ): Promise<DeliveryResult> {
   const started = Date.now();
-  const body = JSON.stringify(payload);
+  const body = content?.rawBody ?? JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signedHeaders: Record<string, string> = signing ? {
     "payloadgrid-id": signing.deliveryId,
@@ -35,7 +37,7 @@ export async function deliverWebhook(
     const response = await fetch(destinationUrl, {
       method: "POST",
       headers: {
-        "content-type": "application/json",
+        "content-type": content?.contentType || "application/json",
         "user-agent": "PayloadGrid-Webhooks/1.0",
         "x-payloadgrid-delivery-mode": mode,
         ...signedHeaders,

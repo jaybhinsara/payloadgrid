@@ -4,9 +4,9 @@ const capabilities = [
   { icon: RefreshCw, title: "Automatic recovery", copy: "Increasing retry intervals, manual replay, and complete attempt history." },
   { icon: Fingerprint, title: "Signed delivery", copy: "Independent HMAC secrets and timestamped signatures for every endpoint." },
   { icon: GitBranch, title: "Event subscriptions", copy: "Send only the event types each destination has chosen to receive." },
-  { icon: Braces, title: "Payload control", copy: "Add, remove, or rename fields before messages leave the control plane." },
-  { icon: BellRing, title: "Failure alerts", copy: "Notify operations through email, Slack, or a custom webhook destination." },
-  { icon: Users, title: "Tenant isolation", copy: "Separate organizations, projects, applications, keys, and delivery records." }
+  { icon: Braces, title: "Schema mapping", copy: "Map nested fields visually and carry JSON, form, XML, or text bodies without format loss." },
+  { icon: BellRing, title: "Traffic circuit breakers", copy: "Buffer anomalous spikes and notify operations before a destination is overwhelmed." },
+  { icon: Users, title: "Customer-native evidence", copy: "Embed a signed, short-lived delivery-history view inside your own product." }
 ];
 
 export function ProblemSection() {

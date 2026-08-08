@@ -87,6 +87,7 @@ create table if not exists projects (
   name text not null,
   slug text not null unique,
   environment text not null default 'production' check (environment in ('development', 'staging', 'production')),
+  payload_retention_mode text not null default 'standard' check (payload_retention_mode in ('standard', 'transient')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -94,6 +95,9 @@ create table if not exists projects (
 alter table projects add column if not exists organization_id uuid references organizations(id) on delete cascade;
 alter table projects add column if not exists environment text not null default 'production';
 alter table projects add column if not exists updated_at timestamptz not null default now();
+alter table projects add column if not exists payload_retention_mode text not null default 'standard';
+alter table projects drop constraint if exists projects_payload_retention_mode_check;
+alter table projects add constraint projects_payload_retention_mode_check check (payload_retention_mode in ('standard', 'transient'));
 
 create table if not exists applications (
   id uuid primary key default gen_random_uuid(),
@@ -125,6 +129,10 @@ create table if not exists endpoints (
   signing_secret text,
   description text,
   rate_limit_per_minute integer not null default 120,
+  circuit_breaker_enabled boolean not null default false,
+  circuit_breaker_threshold integer not null default 100,
+  circuit_state text not null default 'closed' check (circuit_state in ('closed', 'open')),
+  circuit_opened_at timestamptz,
   is_active boolean not null default true,
   deleted_at timestamptz,
   created_at timestamptz not null default now(),
@@ -136,6 +144,12 @@ alter table endpoints add column if not exists signing_secret text;
 alter table endpoints add column if not exists description text;
 alter table endpoints add column if not exists rate_limit_per_minute integer not null default 120;
 alter table endpoints add column if not exists deleted_at timestamptz;
+alter table endpoints add column if not exists circuit_breaker_enabled boolean not null default false;
+alter table endpoints add column if not exists circuit_breaker_threshold integer not null default 100;
+alter table endpoints add column if not exists circuit_state text not null default 'closed';
+alter table endpoints add column if not exists circuit_opened_at timestamptz;
+alter table endpoints drop constraint if exists endpoints_circuit_state_check;
+alter table endpoints add constraint endpoints_circuit_state_check check (circuit_state in ('closed', 'open'));
 
 create table if not exists endpoint_subscriptions (
   endpoint_id uuid not null references endpoints(id) on delete cascade,
@@ -168,7 +182,11 @@ create table if not exists webhook_events (
   event_type text not null,
   request_headers jsonb not null default '{}'::jsonb,
   request_body jsonb not null default '{}'::jsonb,
-  status text not null default 'queued' check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying', 'cancelled', 'dead_letter')),
+  request_content_type text not null default 'application/json',
+  request_raw_body text,
+  is_simulation boolean not null default false,
+  parent_event_id uuid references webhook_events(id) on delete set null,
+  status text not null default 'queued' check (status in ('queued', 'buffered', 'processing', 'received', 'delivered', 'failed', 'retrying', 'cancelled', 'dead_letter')),
   revenue_amount numeric(18,4) not null default 0,
   revenue_currency text,
   revenue_at_risk numeric(18,4) not null default 0,
@@ -187,7 +205,6 @@ alter table webhook_events add column if not exists revenue_amount numeric(18,4)
 alter table webhook_events add column if not exists revenue_currency text;
 alter table webhook_events alter column revenue_amount type numeric(18,4) using revenue_amount::numeric;
 alter table webhook_events alter column revenue_at_risk type numeric(18,4) using revenue_at_risk::numeric;
-update webhook_events set revenue_currency = 'INR' where revenue_currency is null and revenue_amount > 0;
 alter table webhook_events add column if not exists retry_count integer not null default 0;
 alter table webhook_events add column if not exists max_retries integer not null default 4;
 alter table webhook_events add column if not exists next_retry_at timestamptz;
@@ -197,9 +214,13 @@ alter table webhook_events add column if not exists payload_expires_at timestamp
 alter table webhook_events add column if not exists payload_redacted_at timestamptz;
 alter table webhook_events add column if not exists cancelled_at timestamptz;
 alter table webhook_events add column if not exists dead_lettered_at timestamptz;
+alter table webhook_events add column if not exists request_content_type text not null default 'application/json';
+alter table webhook_events add column if not exists request_raw_body text;
+alter table webhook_events add column if not exists is_simulation boolean not null default false;
+alter table webhook_events add column if not exists parent_event_id uuid references webhook_events(id) on delete set null;
 alter table webhook_events alter column status set default 'queued';
 alter table webhook_events drop constraint if exists webhook_events_status_check;
-alter table webhook_events add constraint webhook_events_status_check check (status in ('queued', 'processing', 'received', 'delivered', 'failed', 'retrying', 'cancelled', 'dead_letter'));
+alter table webhook_events add constraint webhook_events_status_check check (status in ('queued', 'buffered', 'processing', 'received', 'delivered', 'failed', 'retrying', 'cancelled', 'dead_letter'));
 
 create table if not exists delivery_attempts (
   id uuid primary key default gen_random_uuid(),
@@ -259,6 +280,17 @@ create table if not exists transformations (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists circuit_breaker_events (
+  id uuid primary key default gen_random_uuid(),
+  endpoint_id uuid not null references endpoints(id) on delete cascade,
+  state text not null check (state in ('opened', 'closed')),
+  observed_count integer not null default 0,
+  baseline_average numeric(12,2) not null default 0,
+  baseline_deviation numeric(12,2) not null default 0,
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists alert_rules (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects(id) on delete cascade,
@@ -295,13 +327,6 @@ create table if not exists audit_logs (
 );
 
 create index if not exists organization_members_user_id_idx on organization_members(user_id);
-with duplicate_pending_invitations as (
-  select id, row_number() over (partition by organization_id, lower(email) order by created_at desc, id desc) as duplicate_rank
-  from organization_invitations
-  where accepted_at is null
-)
-delete from organization_invitations
-where id in (select id from duplicate_pending_invitations where duplicate_rank > 1);
 create unique index if not exists organization_invitations_pending_email_idx on organization_invitations(organization_id, email) where accepted_at is null;
 create index if not exists oauth_accounts_user_id_idx on oauth_accounts(user_id);
 create index if not exists oauth_states_expires_at_idx on oauth_states(expires_at);
@@ -322,19 +347,14 @@ create index if not exists webhook_events_next_retry_at_idx on webhook_events(ne
 create index if not exists webhook_events_dead_letter_idx on webhook_events(received_at desc, id desc) where status = 'dead_letter';
 create index if not exists webhook_events_cursor_idx on webhook_events(received_at desc, id desc);
 create index if not exists webhook_events_queue_idx on webhook_events(status, received_at) where status in ('queued', 'processing', 'retrying');
-with duplicate_provider_events as (
-  select id, row_number() over (partition by endpoint_id, provider_event_id order by received_at asc, id asc) as duplicate_rank
-  from webhook_events
-  where provider_event_id is not null
-)
-update webhook_events set provider_event_id = null
-where id in (select id from duplicate_provider_events where duplicate_rank > 1);
 create unique index if not exists webhook_events_provider_dedup_idx on webhook_events(endpoint_id, provider_event_id) where provider_event_id is not null;
 create index if not exists webhook_events_payload_expiry_idx on webhook_events(payload_expires_at) where payload_redacted_at is null;
 create index if not exists delivery_attempts_event_id_idx on delivery_attempts(event_id);
 create index if not exists api_keys_project_id_idx on api_keys(project_id);
 create index if not exists transformations_project_id_idx on transformations(project_id);
 create index if not exists alert_rules_project_id_idx on alert_rules(project_id);
+create index if not exists circuit_breaker_events_endpoint_created_at_idx on circuit_breaker_events(endpoint_id, created_at desc);
+create index if not exists webhook_events_parent_event_id_idx on webhook_events(parent_event_id);
 create index if not exists audit_logs_organization_created_at_idx on audit_logs(organization_id, created_at desc);
 create table if not exists alert_notifications (
   id uuid primary key default gen_random_uuid(),

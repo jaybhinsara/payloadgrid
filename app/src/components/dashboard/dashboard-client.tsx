@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AlertTriangle, AppWindow, ArchiveX, Ban, BarChart3, CircleCheck, BookOpen, Building2, Braces, ChevronDown, Copy, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, ServerCog, Settings2, Users, X } from "lucide-react";
+import { Activity, AlertTriangle, AppWindow, ArchiveX, Ban, BarChart3, Beaker, CircleCheck, BookOpen, Building2, Braces, ChevronDown, Copy, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, ServerCog, Settings2, Users, X } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Status } from "@/components/dashboard/common";
 import { OnboardingWizard } from "@/components/dashboard/onboarding";
@@ -24,7 +24,7 @@ const nav: Array<{ id: View; label: string; icon: typeof Gauge; group: string }>
 export function DashboardClient() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null); const [view, setView] = useState<View>("overview"); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [busy, setBusy] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false); const [selectedEvent, setSelectedEvent] = useState<EventRow | null>(null); const [newToken, setNewToken] = useState(""); const [inviteToken, setInviteToken] = useState(""); const [lastRefresh, setLastRefresh] = useState<Date | null>(null); const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); const [selectedEvent, setSelectedEvent] = useState<EventRow | null>(null); const [newToken, setNewToken] = useState(""); const [inviteToken, setInviteToken] = useState(""); const [embedUrl, setEmbedUrl] = useState(""); const [lastRefresh, setLastRefresh] = useState<Date | null>(null); const [onboardingOpen, setOnboardingOpen] = useState(false);
 
   const load = useCallback(async (manual = false) => { if (manual) setBusy("refresh"); const response = await fetch("/api/dashboard", { cache: "no-store" }); if (response.status === 401) { router.replace("/login"); return; } const payload = await response.json().catch(() => ({})); if (!response.ok) setError(payload.error || "Could not load workspace"); else { setData(payload); setError(""); setLastRefresh(new Date()); } if (manual) setBusy(""); }, [router]);
   useEffect(() => { load(); const timer = window.setInterval(() => { if (document.visibilityState === "visible") load(); }, 8000); return () => window.clearInterval(timer); }, [load]);
@@ -79,7 +79,7 @@ export function DashboardClient() {
     <aside className={`console-sidebar ${menuOpen ? "open" : ""}`}><div className="sidebar-brand"><Brand href="/dashboard" /><button className="icon-button mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={19} /></button></div><WorkspaceSwitcher data={data} switchOrganization={switchOrganization} manage={() => { setView("workspace"); setMenuOpen(false); }} /><nav className="console-nav">{["Workspace", "Activity", "Manage"].map((group) => <div key={group}><span>{group}</span>{visibleNav.filter((item) => item.group === group).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setMenuOpen(false); }}><Icon size={17} />{label}{id === "deliveries" && data.metrics.openIncidents ? <em>{data.metrics.openIncidents}</em> : null}</button>)}</div>)}</nav><a className="sidebar-docs" href="/docs"><BookOpen size={16} /> Documentation</a><div className="sidebar-user"><span>{data.context.user.name.slice(0, 1).toUpperCase()}</span><div><strong>{data.context.user.name}</strong><small>{data.context.organization.role}</small></div><button className="icon-button" onClick={logout} title="Sign out"><LogOut size={16} /></button></div></aside>
     <section className="console-content"><header className="console-topbar"><div><button className="icon-button mobile-only" onClick={() => setMenuOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div><span>{data.context.project.environment} /</span><strong>{visibleNav.find((item) => item.id === view)?.label}</strong></div></div><div><span className="environment-pill"><i /> {data.system.queueConfigured ? "durable queue" : "direct delivery"}</span><span className="environment-pill"><i /> {data.context.project.environment}</span><button className="icon-button" onClick={() => load(true)} title="Refresh"><RefreshCw className={busy === "refresh" ? "spin" : ""} size={17} /></button><span className="avatar">{data.context.user.name.slice(0, 1).toUpperCase()}</span></div></header>{error ? <div className="alert-banner"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={15} /></button></div> : null}{notice ? <div className="notice-banner"><CircleCheck size={17} /><span>{notice}</span><button onClick={() => setNotice("")}><X size={15} /></button></div> : null}<div className="view-content">
       {view === "overview" ? <OverviewView data={data} setView={setView} inspect={setSelectedEvent} endpointName={endpointName} lastRefresh={lastRefresh} startOnboarding={startOnboarding} /> : null}
-      {view === "applications" ? <ApplicationsView data={data} busy={busy} submit={submit} /> : null}
+      {view === "applications" ? <ApplicationsView data={data} busy={busy} submit={submit} mutate={mutate} reveal={setEmbedUrl} /> : null}
       {view === "endpoints" ? <EndpointsView data={data} busy={busy} submit={submit} copy={copy} mutate={mutate} /> : null}
       {view === "messages" ? <MessagesView data={data} busy={busy} submit={submit} /> : null}
       {view === "deliveries" ? <DeliveriesView initialEvents={data.events} endpoints={data.endpoints} inspect={setSelectedEvent} replay={replayDelivery} mutate={mutate} refreshVersion={lastRefresh?.getTime() || 0} /> : null}
@@ -94,6 +94,7 @@ export function DashboardClient() {
     {selectedEvent ? <EventDrawer event={selectedEvent} endpointName={endpointName} close={() => setSelectedEvent(null)} copy={copy} replay={replayDelivery} mutate={mutate} /> : null}
     {newToken ? <SecretModal title="API key created" copy="This key is shown once. Store it securely before closing." secret={newToken} close={() => setNewToken("")} copyValue={copy} /> : null}
     {inviteToken ? <SecretModal title="Invitation link created" copy="Share this one-time signup link securely with the invited teammate." secret={inviteToken} close={() => setInviteToken("")} copyValue={copy} /> : null}
+    {embedUrl ? <SecretModal title="Embed link created" copy="This customer-facing delivery view expires in 30 minutes. Use it as an iframe source or open it directly." secret={embedUrl} close={() => setEmbedUrl("")} copyValue={copy} /> : null}
     {onboardingOpen ? <OnboardingWizard data={data} mutate={mutate} close={closeOnboarding} goTo={setView} /> : null}
   </main>;
 }
@@ -120,6 +121,9 @@ function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { eve
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState("");
   const [detailError, setDetailError] = useState("");
+  const [simulationOpen, setSimulationOpen] = useState(false);
+  const [simulationPayload, setSimulationPayload] = useState(JSON.stringify(event.request_body, null, 2));
+  const [simulationHeaders, setSimulationHeaders] = useState(JSON.stringify(event.request_headers || {}, null, 2));
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setDetailError("");
@@ -136,7 +140,17 @@ function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { eve
     setActionBusy("");
     if (payload) close();
   }
-  const pending = ["queued", "received", "retrying"].includes(event.status);
+  async function simulate() {
+    try {
+      setDetailError(""); setActionBusy("simulate");
+      const payload = JSON.parse(simulationPayload);
+      const headers = JSON.parse(simulationHeaders);
+      const result = await mutate(`/api/events/${event.id}/simulate`, { payload, headers });
+      if (result) { setSimulationOpen(false); close(); }
+    } catch (cause) { setDetailError(cause instanceof Error ? cause.message : "Simulation input is invalid JSON"); }
+    finally { setActionBusy(""); }
+  }
+  const pending = ["queued", "buffered", "received", "retrying"].includes(event.status);
   const replayable = ["delivered", "failed", "dead_letter", "cancelled"].includes(event.status);
   return <div className="drawer-backdrop" onMouseDown={close}><aside className="event-drawer" onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}><header><div><span className="section-label">Delivery inspection</span><h2>{event.event_type}</h2><p>{event.id}</p></div><button className="icon-button" onClick={close} aria-label="Close delivery"><X size={19} /></button></header>
     <div className="drawer-summary"><div><span>Status</span><Status value={event.status} /></div><div><span>Endpoint</span><strong>{event.endpoint_name || endpointName(event.endpoint_id)}</strong></div><div><span>Response</span><strong>{event.response_status ? `HTTP ${event.response_status}` : "No response"}</strong></div><div><span>Latency</span><strong>{event.latency_ms || 0}ms</strong></div><div><span>Attempts</span><strong>{event.attempt_count}/{event.max_retries}</strong></div><div><span>Direction</span><strong>{event.direction}</strong></div></div>
@@ -145,7 +159,8 @@ function EventDrawer({ event, endpointName, close, copy, replay, mutate }: { eve
     <section className="attempt-section"><div className="attempt-heading"><div><span className="section-label">Attempt history</span><h3>{attempts.length} delivery attempts</h3></div>{loading ? <LoaderCircle className="spin" size={17} /> : null}</div>{attempts.length ? <div className="attempt-timeline">{attempts.map((attempt) => <AttemptRow key={attempt.id} attempt={attempt} />)}</div> : !loading ? <p className="attempt-empty">No destination attempt has run yet.</p> : null}</section>
     <DrawerCode title="Original payload" value={JSON.stringify(event.request_body, null, 2)} copy={copy} />
     <DrawerCode title="Original request headers" value={JSON.stringify(event.request_headers, null, 2)} copy={copy} />
-    <footer>{pending ? <button className="button danger" disabled={Boolean(actionBusy)} onClick={() => void run("cancel")}><Ban size={16} /> Cancel retry</button> : null}{event.status === "failed" ? <button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => void run("dead-letter")}><ArchiveX size={16} /> Move to dead letter</button> : null}{replayable ? <button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void run("replay")}><RotateCcw size={16} /> Replay delivery</button> : null}</footer>
+    {simulationOpen ? <section className="simulation-editor"><div><span className="section-label">Replay sandbox</span><button className="icon-button" onClick={() => setSimulationOpen(false)} aria-label="Close simulation"><X size={14} /></button></div><p>Edit a copy. This creates a separate test delivery and does not change production health metrics.</p><label>JSON payload<textarea className="code-input" value={simulationPayload} onChange={(change) => setSimulationPayload(change.target.value)} /></label><label>Request headers<textarea className="code-input small" value={simulationHeaders} onChange={(change) => setSimulationHeaders(change.target.value)} /></label><button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void simulate()}><Beaker size={16} /> Run simulation</button></section> : null}
+    <footer><button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => setSimulationOpen(true)}><Beaker size={16} /> Simulate</button>{pending ? <button className="button danger" disabled={Boolean(actionBusy)} onClick={() => void run("cancel")}><Ban size={16} /> Cancel retry</button> : null}{event.status === "failed" ? <button className="button secondary" disabled={Boolean(actionBusy)} onClick={() => void run("dead-letter")}><ArchiveX size={16} /> Move to dead letter</button> : null}{replayable ? <button className="button primary" disabled={Boolean(actionBusy)} onClick={() => void run("replay")}><RotateCcw size={16} /> Replay delivery</button> : null}</footer>
   </aside></div>;
 }
 

@@ -5,7 +5,8 @@ import { writeAudit } from "@/lib/audit";
 import { assertSafeDestinationUrl } from "@/lib/destination-security";
 import { requireSql } from "@/lib/db";
 
-const transformSchema = z.object({ kind: z.literal("transformation"), name: z.string().min(2).max(80), eventType: z.string().max(120).optional(), config: z.object({ addFields: z.record(z.string(), z.unknown()).optional(), removeFields: z.array(z.string()).optional(), renameFields: z.record(z.string(), z.string()).optional() }) });
+const mappingSchema = z.object({ from: z.string().trim().min(1).max(160), to: z.string().trim().min(1).max(160) });
+const transformSchema = z.object({ kind: z.literal("transformation"), name: z.string().min(2).max(80), eventType: z.string().max(120).optional(), config: z.object({ addFields: z.record(z.string(), z.unknown()).optional(), removeFields: z.array(z.string()).optional(), renameFields: z.record(z.string(), z.string()).optional(), mappings: z.array(mappingSchema).max(50).optional() }) });
 const alertSchema = z.object({ kind: z.literal("alert"), name: z.string().min(2).max(80), channel: z.enum(["email", "slack", "webhook"]), destination: z.string().min(3).max(500), failureThreshold: z.number().int().min(1).max(100).default(3), windowMinutes: z.number().int().min(1).max(1440).default(15) });
 const schema = z.discriminatedUnion("kind", [transformSchema, alertSchema]);
 export async function POST(request: Request) {

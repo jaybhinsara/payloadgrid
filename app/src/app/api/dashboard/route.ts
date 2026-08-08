@@ -18,13 +18,15 @@ export async function GET() {
     const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, metricRows, usageRows] = await Promise.all([
       sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
       sql`
-        select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active, ep.created_at,
+        select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active,
+          ep.circuit_breaker_enabled, ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.created_at,
           coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
         from endpoints ep where ep.project_id = ${context.project.id} and ep.deleted_at is null order by ep.created_at desc
       `,
       sql`
         select e.id, e.endpoint_id, ep.name as endpoint_name, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
           e.event_type, e.status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
+          e.request_content_type, e.is_simulation, e.parent_event_id,
           e.retry_count, e.max_retries, e.next_retry_at, e.last_error, e.cancelled_at, e.dead_lettered_at,
           coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
         from webhook_events e
@@ -56,32 +58,32 @@ export async function GET() {
       sql`
         select count(*)::text as total_events,
           count(*) filter (where status in ('delivered','failed','dead_letter'))::text as terminal_events,
-          count(*) filter (where status = 'queued')::text as queued_events,
+          count(*) filter (where status in ('queued','buffered'))::text as queued_events,
           count(*) filter (where status = 'processing')::text as processing_events,
           count(*) filter (where status in ('failed','dead_letter'))::text as failed_events,
           count(*) filter (where status = 'retrying')::text as retrying_events,
           count(*) filter (where status = 'dead_letter')::text as dead_lettered_events,
           count(*) filter (where status = 'delivered')::text as delivered_events,
-          min(received_at) filter (where status in ('queued','processing','received','retrying')) as oldest_pending_at,
+          min(received_at) filter (where status in ('queued','buffered','processing','received','retrying')) as oldest_pending_at,
           coalesce((
             select jsonb_agg(jsonb_build_object('currency', risk.currency, 'amount', risk.amount) order by risk.amount desc)
             from (
               select risky.revenue_currency as currency, sum(risky.revenue_at_risk) as amount
               from webhook_events risky
               where risky.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
-                and risky.status <> 'delivered' and risky.revenue_currency is not null and risky.revenue_at_risk > 0
+                and risky.status <> 'delivered' and risky.is_simulation = false and risky.revenue_currency is not null and risky.revenue_at_risk > 0
               group by risky.revenue_currency
             ) risk
           ), '[]'::jsonb) as revenue_at_risk,
           coalesce(avg(latest.latency_ms), 0)::text as avg_latency
         from webhook_events e
         left join lateral (select latency_ms from delivery_attempts where event_id = e.id order by created_at desc limit 1) latest on true
-        where e.endpoint_id in (select id from endpoints where project_id = ${context.project.id})
+        where e.endpoint_id in (select id from endpoints where project_id = ${context.project.id}) and e.is_simulation = false
       `,
       sql`
         select date_trunc('month', now()) as period_start,
           ((select count(*) from messages where project_id = ${context.project.id} and created_at >= date_trunc('month', now())) +
-           (select count(*) from webhook_events e join endpoints ep on ep.id = e.endpoint_id where ep.project_id = ${context.project.id} and e.direction = 'inbound' and e.received_at >= date_trunc('month', now())))::int as accepted_events
+           (select count(*) from webhook_events e join endpoints ep on ep.id = e.endpoint_id where ep.project_id = ${context.project.id} and e.direction = 'inbound' and e.is_simulation = false and e.received_at >= date_trunc('month', now())))::int as accepted_events
       `
     ]);
     const metric = metricRows[0] as MetricRow | undefined;

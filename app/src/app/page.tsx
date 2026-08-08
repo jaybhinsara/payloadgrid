@@ -2,7 +2,7 @@ import { Radio } from "lucide-react";
 import { MarketingHero } from "@/components/marketing/hero";
 import { MarketingMotion } from "@/components/marketing/motion";
 import { PlatformSection, ProblemSection } from "@/components/marketing/platform";
-import { DeveloperSection, FinalCta, SecuritySection, UseCasesSection } from "@/components/marketing/growth";
+import { DeveloperSection, FinalCta, LocalDevelopmentSection, SecuritySection, UseCasesSection } from "@/components/marketing/growth";
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { SITE_URL } from "@/lib/site";
@@ -26,6 +26,6 @@ export default function Home() {
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} /><main className="marketing-v2">
     <MarketingMotion /><PublicHeader /><MarketingHero />
     <section className="proof-rail" aria-label="Supported webhook ecosystems"><span><Radio size={13} /> BUILT FOR</span><div><strong>SAAS PLATFORMS</strong><strong>PAYMENT APIS</strong><strong>COMMERCE</strong><strong>INTERNAL SYSTEMS</strong><strong>CUSTOM EVENTS</strong></div></section>
-    <ProblemSection /><PlatformSection /><UseCasesSection /><SecuritySection /><DeveloperSection /><FinalCta /><PublicFooter />
+    <ProblemSection /><PlatformSection /><UseCasesSection /><LocalDevelopmentSection /><SecuritySection /><DeveloperSection /><FinalCta /><PublicFooter />
   </main></>;
 }

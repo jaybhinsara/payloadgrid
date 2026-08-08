@@ -193,7 +193,7 @@ Subscribed event types: order.completed
 
 PayloadGrid generates:
 
-- an inbound URL such as `https://payloadgrid.vercel.app/in/ENDPOINT_UUID`;
+- an inbound URL such as `https://payloadgrid.com/in/ENDPOINT_UUID`;
 - a signing secret beginning with `whsec_`.
 
 Store the signing secret in the destination application's secret manager. Do not put it in frontend code.
@@ -218,7 +218,7 @@ PayloadGrid stores only a SHA-256 hash and key prefix. A lost key cannot be reco
 ### Step 6: send the first event
 
 ```bash
-curl -X POST https://payloadgrid.vercel.app/api/v1/messages \
+curl -X POST https://payloadgrid.com/api/v1/messages \
   -H "Authorization: Bearer pg_live_YOUR_KEY" \
   -H "Idempotency-Key: order_8921_completed" \
   -H "Content-Type: application/json" \
@@ -297,7 +297,7 @@ Important behavior:
 ## 7. Sending from Node.js
 
 ```js
-const response = await fetch("https://payloadgrid.vercel.app/api/v1/messages", {
+const response = await fetch("https://payloadgrid.com/api/v1/messages", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${process.env.PAYLOADGRID_API_KEY}`,

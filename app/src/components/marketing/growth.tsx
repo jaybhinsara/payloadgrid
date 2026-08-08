@@ -74,6 +74,19 @@ response = requests.post(
 message = response.json()`
 } as const;
 
+const frameworkExamples = {
+  "Next.js": `await fetch(process.env.PAYLOADGRID_URL + "/api/v1/messages", {\n  method: "POST", headers: { Authorization: \`Bearer \${process.env.PAYLOADGRID_KEY}\`,\n  "Content-Type": "application/json" }, body: JSON.stringify(message)\n});`,
+  Remix: `return fetch(env.PAYLOADGRID_URL + "/api/v1/messages", {\n  method: "POST", headers: { Authorization: \`Bearer \${env.PAYLOADGRID_KEY}\`,\n  "Content-Type": "application/json" }, body: JSON.stringify(message)\n});`,
+  Django: `requests.post(settings.PAYLOADGRID_URL + "/api/v1/messages",\n    headers={"Authorization": f"Bearer {settings.PAYLOADGRID_KEY}"},\n    json=message, timeout=5)`,
+  Laravel: `Http::withToken(config('services.payloadgrid.key'))\n    ->post(config('services.payloadgrid.url').'/api/v1/messages', $message);`,
+  Go: `body, _ := json.Marshal(message)\nreq, _ := http.NewRequest("POST", payloadGridURL+"/api/v1/messages", bytes.NewReader(body))\nreq.Header.Set("Authorization", "Bearer "+payloadGridKey)\nclient.Do(req)`
+} as const;
+
+export function LocalDevelopmentSection() {
+  const [framework, setFramework] = useState<keyof typeof frameworkExamples>("Next.js");
+  return <><section className="local-relay" data-reveal><div><span className="section-label">Local development</span><h2>Debug production-shaped events on localhost.</h2><p>The local relay CLI is in private preview. It is designed to authenticate a terminal session, subscribe to an endpoint, and forward captured events into a local server without a permanent public tunnel.</p><span className="preview-badge">CLI · PRIVATE PREVIEW</span></div><div className="relay-terminal"><header><i /><i /><i /><span>payloadgrid relay</span></header><pre><code><em>$</em> npm i -g payloadgrid-cli{"\n"}<em>$</em> pg login{"\n"}<strong>✓ authenticated · production</strong>{"\n"}<em>$</em> pg listen --port 3000{"\n"}<strong>✓ forwarding payment.captured → localhost:3000</strong>{"\n"}<span>200 POST /webhooks · 184ms</span></code></pre></div></section><section className="framework-recipes" data-reveal><div><span className="section-label">Framework recipes</span><h2>Use the HTTP client your backend already trusts.</h2><p>No package lock-in. Start with a native request and preserve authentication, idempotency, and tenant routing across modern stacks.</p></div><div className="api-studio"><div className="studio-tabs" role="tablist" aria-label="Framework recipe">{(Object.keys(frameworkExamples) as Array<keyof typeof frameworkExamples>).map((name) => <button key={name} role="tab" aria-selected={framework === name} className={framework === name ? "active" : ""} onClick={() => setFramework(name)}>{name}</button>)}</div><pre><code>{frameworkExamples[framework]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div></section><section className="debt-proof" data-reveal><span className="section-label">Engineering debt avoided</span><h2>Skip weeks of queue plumbing. Integrate the delivery API in minutes.</h2><p>Keep Redis dead-letter queues, exponential backoff workers, signature rotation scripts, and delivery evidence out of your product backlog.</p></section></>;
+}
+
 export function DeveloperSection() {
   const [language, setLanguage] = useState<keyof typeof apiExamples>("curl");
   return <section className="developer-section" id="developers">

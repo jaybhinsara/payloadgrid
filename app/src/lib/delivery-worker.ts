@@ -14,7 +14,17 @@ export async function updateMessageStatus(messageId: string) {
   `;
   const total = Number(summary.total); const delivered = Number(summary.delivered); const active = Number(summary.active);
   const status = active > 0 ? "processing" : delivered === total ? "delivered" : delivered > 0 ? "partial" : "failed";
-  await sql`update messages set status = ${status}, updated_at = now() where id = ${messageId}`;
+  await sql`
+    update messages m set
+      status = ${status},
+      payload = case
+        when ${active === 0} and p.payload_retention_mode = 'transient' then '{"redacted":true}'::jsonb
+        else m.payload
+      end,
+      updated_at = now()
+    from projects p
+    where m.id = ${messageId} and p.id = m.project_id
+  `;
 }
 
 export async function processDelivery(eventId: string) {
@@ -25,12 +35,14 @@ export async function processDelivery(eventId: string) {
       and status in ('queued','received','retrying')
       and (next_retry_at is null or next_retry_at <= now())
       and (locked_at is null or locked_at < now() - interval '5 minutes')
-    returning id, endpoint_id, message_id, direction, event_type, request_body, max_retries, revenue_amount, revenue_at_risk
+    returning id, endpoint_id, message_id, direction, event_type, request_body, request_raw_body, request_content_type,
+      max_retries, revenue_amount, revenue_at_risk
   `;
   if (!claimed) return { processed: false, reason: "Event is already processing, completed, or not due" };
   const [endpoint] = await sql`
-    select project_id, destination_url, signing_secret, is_active, rate_limit_per_minute
-    from endpoints where id = ${claimed.endpoint_id} limit 1
+    select ep.project_id, ep.destination_url, ep.signing_secret, ep.is_active, ep.rate_limit_per_minute,
+      p.payload_retention_mode
+    from endpoints ep join projects p on p.id = ep.project_id where ep.id = ${claimed.endpoint_id} limit 1
   `;
   if (!endpoint?.is_active) {
     await sql`update webhook_events set status = 'dead_letter', locked_at = null, next_retry_at = null, dead_lettered_at = now(), last_error = 'Endpoint is inactive', updated_at = now() where id = ${claimed.id}`;
@@ -44,7 +56,8 @@ export async function processDelivery(eventId: string) {
   const headers = { "payloadgrid-event-type": String(claimed.event_type) };
   const delivery = await deliverWebhook(
     String(endpoint.destination_url), claimed.request_body, mode, headers,
-    endpoint.signing_secret ? { secret: String(endpoint.signing_secret), deliveryId: String(claimed.id) } : undefined
+    endpoint.signing_secret ? { secret: String(endpoint.signing_secret), deliveryId: String(claimed.id) } : undefined,
+    { rawBody: claimed.request_raw_body ? String(claimed.request_raw_body) : null, contentType: String(claimed.request_content_type || "application/json") }
   );
   const willRetry = !delivery.ok && shouldRetry(attempt, maxRetries);
   const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "dead_letter";
@@ -61,6 +74,13 @@ export async function processDelivery(eventId: string) {
       last_error = ${delivery.error || (delivery.ok ? null : `Destination HTTP ${delivery.status}`)}, updated_at = now()
     where id = ${claimed.id}
   `;
+  if (String(endpoint.payload_retention_mode) === "transient" && !willRetry) {
+    await sql`
+      update webhook_events set request_body = '{"redacted":true}'::jsonb, request_raw_body = null,
+        payload_redacted_at = now(), updated_at = now()
+      where id = ${claimed.id}
+    `;
+  }
   if (claimed.message_id) await updateMessageStatus(String(claimed.message_id));
   if (!delivery.ok) await notifyFailure({ projectId: String(endpoint.project_id), eventId: String(claimed.id), eventType: String(claimed.event_type), error: delivery.error || `Destination HTTP ${delivery.status}` });
   let retryScheduled = false;
