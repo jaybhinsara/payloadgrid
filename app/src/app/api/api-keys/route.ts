@@ -5,8 +5,8 @@ import { writeAudit } from "@/lib/audit";
 import { requireSql } from "@/lib/db";
 import { createApiKey } from "@/lib/security";
 
-const scopeSchema = z.enum(["messages:write", "events:read"]);
-const schema = z.object({ name: z.string().trim().min(2).max(80), scopes: z.array(scopeSchema).min(1).max(2).default(["messages:write"]) });
+const scopeSchema = z.enum(["messages:write", "events:read", "embeds:write"]);
+const schema = z.object({ name: z.string().trim().min(2).max(80), scopes: z.array(scopeSchema).min(1).max(3).default(["messages:write"]) });
 export async function GET() {
   try { const context = await requireSession(); const sql = requireSql(); const keys = await sql`select id, name, key_prefix, scopes, last_used_at, created_at, revoked_at from api_keys where project_id = ${context.project.id} order by created_at desc`; return NextResponse.json({ ok: true, keys }); }
   catch (error) { const result = authErrorResponse(error); return NextResponse.json({ ok: false, error: result.message }, { status: result.status }); }

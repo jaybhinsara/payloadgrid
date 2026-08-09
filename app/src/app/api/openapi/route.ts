@@ -39,6 +39,14 @@ export function GET() {
           responses: { "200": { description: "Project-scoped relay events and the next cursor." }, "401": { description: "Invalid key or missing events:read scope." } }
         }
       },
+      "/api/v1/embed-token": {
+        post: {
+          summary: "Create a short-lived embedded delivery portal URL", operationId: "createEmbedToken",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateEmbedToken" } } } },
+          responses: { "200": { description: "Permission-scoped embed URL valid for 5 to 60 minutes." }, "401": { description: "Invalid key or missing embeds:write scope." }, "404": { description: "Application not found in the key's project." } }
+        }
+      },
       "/in/{endpointId}": {
         post: {
           summary: "Accept an inbound provider webhook", operationId: "receiveProviderWebhook",
@@ -54,6 +62,7 @@ export function GET() {
       schemas: {
         CreateMessage: { type: "object", required: ["applicationId", "eventType", "payload"], properties: { applicationId: { type: "string", format: "uuid" }, eventType: { type: "string", minLength: 1, maxLength: 120, examples: ["order.completed"] }, idempotencyKey: { type: "string", maxLength: 200 }, payload: {} } },
         CreateMessageBatch: { type: "object", required: ["events"], properties: { events: { type: "array", minItems: 1, maxItems: 100, items: { $ref: "#/components/schemas/CreateMessage" } } } },
+        CreateEmbedToken: { type: "object", required: ["applicationId"], properties: { applicationId: { type: "string", format: "uuid" }, expiresInMinutes: { type: "integer", minimum: 5, maximum: 60, default: 30 }, permissions: { type: "array", minItems: 1, maxItems: 2, items: { type: "string", enum: ["deliveries:read", "deliveries:replay"] }, default: ["deliveries:read"] } } },
         AcceptedMessage: { type: "object", required: ["ok", "messageId", "status", "queuedDeliveries"], properties: { ok: { type: "boolean", const: true }, messageId: { type: "string", format: "uuid" }, status: { type: "string", enum: ["accepted", "delivered"] }, duplicate: { type: "boolean" }, queuedDeliveries: { type: "integer" }, queueConfigured: { type: "boolean" } } }
       }
     }

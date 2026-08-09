@@ -1,7 +1,7 @@
 import { requireSql } from "@/lib/db";
 import { sha256 } from "@/lib/security";
 
-export type ApiScope = "messages:write" | "events:read";
+export type ApiScope = "messages:write" | "events:read" | "embeds:write";
 export type ApiKeyContext = { keyId: string; projectId: string; organizationId: string; scopes: string[] };
 
 export async function authenticateApiKey(request: Request, requiredScope?: ApiScope): Promise<ApiKeyContext | null> {

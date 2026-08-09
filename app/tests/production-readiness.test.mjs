@@ -10,6 +10,7 @@ const outbox = await readFile(new URL("../src/lib/dispatch-outbox.ts", import.me
 const worker = await readFile(new URL("../src/lib/delivery-worker.ts", import.meta.url), "utf8");
 const batch = await readFile(new URL("../src/app/api/v1/messages/batch/route.ts", import.meta.url), "utf8");
 const relay = await readFile(new URL("../src/app/api/v1/relay/events/route.ts", import.meta.url), "utf8");
+const embedToken = await readFile(new URL("../src/app/api/v1/embed-token/route.ts", import.meta.url), "utf8");
 
 test("message acceptance commits fan-out and dispatch intent together", () => {
   assert.match(schema, /create table if not exists dispatch_jobs/);
@@ -17,6 +18,14 @@ test("message acceptance commits fan-out and dispatch intent together", () => {
   assert.match(outbound, /insert into webhook_events/);
   assert.match(outbound, /insert into dispatch_jobs/);
   assert.doesNotMatch(outbound, /enqueueDelivery/);
+});
+
+test("embedded portal tokens require a dedicated scope and project-bound application", () => {
+  assert.match(embedToken, /embeds:write/);
+  assert.match(embedToken, /applicationId.*project_id/s);
+  assert.match(embedToken, /deliveries:read/);
+  assert.match(embedToken, /deliveries:replay/);
+  assert.match(embedToken, /cache-control.*no-store/);
 });
 
 test("outbox supports concurrent claims and stale publication recovery", () => {
