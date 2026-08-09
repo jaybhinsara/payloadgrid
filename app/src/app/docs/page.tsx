@@ -14,40 +14,27 @@ const curlExample = `curl -X POST ${SITE_URL}/api/v1/messages \\
     "eventType": "order.completed",
     "payload": { "orderId": "8921", "status": "completed" }
   }'`;
-const nodeExample = `const response = await fetch("${SITE_URL}/api/v1/messages", {
-  method: "POST",
-  headers: {
-    Authorization: \`Bearer \${process.env.PAYLOADGRID_API_KEY}\`,
-    "Idempotency-Key": "order_8921_completed",
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    applicationId: process.env.PAYLOADGRID_APPLICATION_ID,
-    eventType: "order.completed",
-    payload: { orderId: "8921", status: "completed" }
-  })
-});
+const nodeExample = `npm install @payloadgrid/sdk
 
-if (!response.ok) throw new Error(await response.text());
-const accepted = await response.json();`;
-const pythonExample = `import os
-import requests
+import { PayloadGrid } from "@payloadgrid/sdk";
 
-response = requests.post(
-    "${SITE_URL}/api/v1/messages",
-    headers={
-        "Authorization": f"Bearer {os.environ['PAYLOADGRID_API_KEY']}",
-        "Idempotency-Key": "order_8921_completed",
-    },
-    json={
-        "applicationId": os.environ["PAYLOADGRID_APPLICATION_ID"],
-        "eventType": "order.completed",
-        "payload": {"orderId": "8921", "status": "completed"},
-    },
-    timeout=10,
-)
-response.raise_for_status()
-accepted = response.json()`;
+const payloadgrid = new PayloadGrid({ apiKey: process.env.PAYLOADGRID_API_KEY });
+const accepted = await payloadgrid.send({
+  applicationId: process.env.PAYLOADGRID_APPLICATION_ID,
+  eventType: "order.completed",
+  payload: { orderId: "8921", status: "completed" }
+}, { idempotencyKey: "order_8921_completed" });`;
+const pythonExample = `pip install payloadgrid
+
+from payloadgrid import PayloadGrid
+
+client = PayloadGrid("pg_live_YOUR_KEY")
+accepted = client.send(
+    "APPLICATION_UUID",
+    "order.completed",
+    {"orderId": "8921", "status": "completed"},
+    "order_8921_completed",
+)`;
 const batchExample = `curl -X POST ${SITE_URL}/api/v1/messages/batch \\
   -H "Authorization: Bearer pg_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\

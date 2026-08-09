@@ -21,7 +21,7 @@ Documentation:
 - HTTPS enforcement, private-address SSRF checks, payload limits, rate limits, and duplicate protection
 - Three-day payload retention with scheduled redaction
 - Public documentation, OpenAPI description, pricing, security, privacy, terms, contact, status, and no-signup playground
-- Published npm CLI (`payloadgrid-cli`) plus source-ready TypeScript, Python, and React embed packages under `packages/`
+- Published npm CLI (`payloadgrid-cli`), TypeScript SDK (`@payloadgrid/sdk`), Python SDK (`payloadgrid`), and React embed package (`@payloadgrid/react`)
 
 ## Local setup
 

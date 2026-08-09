@@ -1,5 +1,9 @@
 # PayloadGrid TypeScript SDK
 
+```bash
+npm install @payloadgrid/sdk
+```
+
 ```js
 import { PayloadGrid } from "@payloadgrid/sdk";
 

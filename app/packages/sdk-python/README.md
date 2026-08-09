@@ -1,5 +1,9 @@
 # PayloadGrid Python SDK
 
+```bash
+pip install payloadgrid
+```
+
 ```python
 from payloadgrid import PayloadGrid
 

@@ -14,7 +14,7 @@ This register separates capabilities implemented in the repository from operatio
 - AES-256-GCM encryption for provider secrets and destination authorization headers.
 - SSRF protections, HTTPS enforcement, rate limits, idempotency, retention, audit logs, and role checks.
 - Permission-scoped embedded history and a React iframe wrapper.
-- Published npm relay CLI plus source-ready TypeScript, Python, and React embed packages.
+- Published npm relay CLI, TypeScript SDK, Python SDK, and React embed package.
 - Public component monitoring, incident history, and operator notifications.
 - Repeatable k6 intake profiles and a controllable failure receiver under `load/`.
 
@@ -31,7 +31,6 @@ This register separates capabilities implemented in the repository from operatio
 - Run k6 at agreed target and burst rates in an isolated project. Record API latency, outbox age, queue delay, delivery latency, failure rate, and database utilization.
 - Test destination timeouts, `429`, `500`, queue interruption, duplicate callbacks, and worker interruption.
 - Perform and record a Neon backup restore exercise.
-- Publish the TypeScript, Python, and React embed packages before advertising their install commands as generally available.
 - Establish external uptime monitoring and enough history for any displayed reliability percentage.
 - Complete security, dependency, incident-response, privacy, legal, and data-processing reviews.
 - Define support hours, recovery objectives, retention obligations, and exclusions before offering an SLA.
@@ -44,7 +43,6 @@ This register separates capabilities implemented in the repository from operatio
 - Mutual TLS destinations.
 - Enterprise SAML/OIDC SSO and automated SCIM provisioning.
 - Native SQS, EventBridge, Pub/Sub, or Kafka destinations. The adapter boundary exists, but each transport still needs credential, retry, and delivery-semantics design.
-- Published npm/PyPI distributions for the source-ready TypeScript, Python, and React embed packages.
 - A contractual SLA or compliance certification.
 
 These are not UI switches. They require provider provisioning, security and legal work, operational ownership, and measured evidence. PayloadGrid must not market them as available until those dependencies are complete.
