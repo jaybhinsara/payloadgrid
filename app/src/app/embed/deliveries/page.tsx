@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EmbedDeliveryTable, type EmbeddedEvent } from "@/components/embed-delivery-table";
 import { verifyEmbedToken } from "@/lib/embed";
 import { requireSql } from "@/lib/db";
 
@@ -20,5 +21,11 @@ export default async function EmbeddedDeliveries({ searchParams }: { searchParam
     where ep.project_id = ${claims.projectId} and e.application_id = ${claims.applicationId}
     order by e.received_at desc limit 50
   `;
-  return <main className="embed-shell"><header><div><span>PAYLOADGRID DELIVERY HISTORY</span><h1>{String(application.name)}</h1></div><i>Live evidence</i></header><div className="embed-table"><div className="embed-row embed-head"><span>Event</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Received</span></div>{events.map((event) => <div className="embed-row" key={String(event.id)}><span><strong>{String(event.event_type)}</strong><small>{String(event.id).slice(0, 12)}{event.is_simulation ? " · simulation" : ""}</small></span><span>{String(event.endpoint_name)}</span><span><i className={`embed-status ${String(event.status)}`}>{String(event.status).replaceAll("_", " ")}</i></span><span>{event.response_status ? `HTTP ${event.response_status} · ${event.latency_ms || 0}ms` : "Pending"}</span><time>{new Date(String(event.received_at)).toLocaleString()}</time></div>)}</div></main>;
+  const tableEvents: EmbeddedEvent[] = events.map((event) => ({
+    id: String(event.id), eventType: String(event.event_type), endpointName: String(event.endpoint_name), status: String(event.status),
+    responseStatus: event.response_status ? Number(event.response_status) : null,
+    latencyMs: event.latency_ms ? Number(event.latency_ms) : null,
+    receivedAt: String(event.received_at), simulation: Boolean(event.is_simulation)
+  }));
+  return <main className="embed-shell"><header><div><span>PAYLOADGRID DELIVERY HISTORY</span><h1>{String(application.name)}</h1></div><i>Live evidence</i></header><EmbedDeliveryTable initialEvents={tableEvents} token={token} canReplay={claims.permissions.includes("deliveries:replay")} /></main>;
 }

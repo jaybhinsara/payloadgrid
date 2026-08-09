@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { processDelivery } from "@/lib/delivery-worker";
 import { requireSql } from "@/lib/db";
+import { dispatchOutboxBatch, recoverMissingDispatchJobs } from "@/lib/dispatch-outbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,14 +11,9 @@ export async function GET(request: Request) {
   try {
     const sql = requireSql();
     await sql`update webhook_events set status = 'queued', locked_at = null where status = 'processing' and locked_at < now() - interval '5 minutes'`;
-    const events = await sql`
-      select id from webhook_events
-      where status in ('queued','retrying','received') and (next_retry_at is null or next_retry_at <= now())
-      order by coalesce(next_retry_at, received_at) asc limit 25
-    `;
-    const results = [];
-    for (const event of events) results.push(await processDelivery(String(event.id)));
-    return NextResponse.json({ ok: true, processed: results.filter((result) => result.processed).length, results });
+    const recovered = await recoverMissingDispatchJobs(250);
+    const dispatch = await dispatchOutboxBatch(100);
+    return NextResponse.json({ ok: true, recovered, dispatch });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Queue drain failed" }, { status: 500 });
   }

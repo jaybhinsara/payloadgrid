@@ -17,6 +17,8 @@ export async function GET(request: Request) {
     await sql`update messages set payload = '{"redacted":true}'::jsonb where created_at <= now() - interval '3 days' and payload <> '{"redacted":true}'::jsonb`;
     await sql`delete from api_usage_windows where window_start < now() - interval '2 days'`;
     await sql`delete from endpoint_usage_windows where window_start < now() - interval '2 days'`;
+    await sql`delete from dispatch_jobs where status = 'published' and published_at < now() - interval '7 days'`;
+    await sql`update endpoints set previous_signing_secret = null, previous_signing_secret_expires_at = null where previous_signing_secret_expires_at <= now()`;
     await sql`delete from sessions where expires_at <= now()`;
     await sql`delete from oauth_states where expires_at <= now()`;
     return NextResponse.json({ ok: true, redactedEvents: expired.length });

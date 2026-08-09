@@ -1,0 +1,11 @@
+{
+  "name": "@payloadgrid/react",
+  "version": "0.1.0",
+  "description": "PayloadGrid embedded delivery portal component",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "peerDependencies": { "react": ">=18" },
+  "files": ["index.js", "index.d.ts", "README.md"],
+  "license": "MIT"
+}

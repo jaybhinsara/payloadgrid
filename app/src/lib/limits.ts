@@ -33,7 +33,7 @@ export async function enforceInboundRateLimit(endpointId: string) {
   if (Number(usage.request_count) > PLAN_LIMITS.inboundRequestsPerMinute) throw new UsageLimitError("Inbound endpoint rate limit exceeded. Retry after the current minute.");
 }
 
-export async function enforceMonthlyMessageLimit(projectId: string) {
+export async function enforceMonthlyMessageLimit(projectId: string, incomingCount = 1) {
   const sql = requireSql();
   const [usage] = await sql`
     select (
@@ -41,5 +41,5 @@ export async function enforceMonthlyMessageLimit(projectId: string) {
       (select count(*) from webhook_events e join endpoints ep on ep.id = e.endpoint_id where ep.project_id = ${projectId} and e.direction = 'inbound' and e.received_at >= date_trunc('month', now()))
     )::int as count
   `;
-  if (Number(usage.count) >= PLAN_LIMITS.messagesPerMonth) throw new UsageLimitError("Monthly event limit reached for the current plan");
+  if (Number(usage.count) + Math.max(1, incomingCount) > PLAN_LIMITS.messagesPerMonth) throw new UsageLimitError("Monthly event limit reached for the current plan");
 }

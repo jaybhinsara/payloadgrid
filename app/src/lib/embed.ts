@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-type EmbedClaims = { projectId: string; applicationId: string; exp: number };
+export type EmbedPermission = "deliveries:read" | "deliveries:replay";
+export type EmbedClaims = { projectId: string; applicationId: string; permissions: EmbedPermission[]; exp: number };
 
 function secret() {
   const value = process.env.PAYLOADGRID_EMBED_SECRET || process.env.PAYLOADGRID_ENCRYPTION_KEY;
@@ -23,6 +24,7 @@ export function verifyEmbedToken(token: string): EmbedClaims | null {
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as EmbedClaims;
     if (!claims.projectId || !claims.applicationId || claims.exp <= Math.floor(Date.now() / 1000)) return null;
+    claims.permissions = Array.isArray(claims.permissions) ? claims.permissions : ["deliveries:read"];
     return claims;
   } catch { return null; }
 }

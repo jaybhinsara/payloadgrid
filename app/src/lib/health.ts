@@ -7,6 +7,10 @@ export type SystemHealth = {
   deliveryQueue: "operational" | "fallback";
   pendingDeliveries: number;
   oldestPendingSeconds: number;
+  pendingDispatchJobs: number;
+  publishingDispatchJobs: number;
+  dispatchErrors: number;
+  oldestDispatchSeconds: number;
   lastDeliveryAt: string | null;
   checkedAt: string;
 };
@@ -45,16 +49,47 @@ async function readQueueMetrics(projectId?: string) {
   return row;
 }
 
+async function readOutboxMetrics(projectId?: string) {
+  const sql = requireSql();
+  if (projectId) {
+    const [row] = await sql`
+      select count(*) filter (where j.status = 'pending')::int as pending,
+        count(*) filter (where j.status = 'publishing')::int as publishing,
+        count(*) filter (where j.last_error is not null and j.updated_at >= now() - interval '1 hour')::int as errors,
+        coalesce(extract(epoch from (now() - min(j.created_at) filter (where j.status <> 'published'))), 0)::int as oldest_seconds
+      from dispatch_jobs j
+      join webhook_events e on e.id = j.event_id
+      join endpoints ep on ep.id = e.endpoint_id
+      where ep.project_id = ${projectId}
+    `;
+    return row;
+  }
+  const [row] = await sql`
+    select count(*) filter (where status = 'pending')::int as pending,
+      count(*) filter (where status = 'publishing')::int as publishing,
+      count(*) filter (where last_error is not null and updated_at >= now() - interval '1 hour')::int as errors,
+      coalesce(extract(epoch from (now() - min(created_at) filter (where status <> 'published'))), 0)::int as oldest_seconds
+    from dispatch_jobs
+  `;
+  return row;
+}
+
 export async function readSystemHealth(projectId?: string): Promise<SystemHealth> {
   const row = await readQueueMetrics(projectId);
+  const outbox = await readOutboxMetrics(projectId);
   const configured = queueConfigured();
   const oldest = Number(row.oldest_pending_seconds || 0);
+  const oldestDispatch = Number(outbox.oldest_seconds || 0);
   return {
-    status: configured && oldest < 300 ? "operational" : "degraded",
+    status: configured && oldest < 300 && oldestDispatch < 300 ? "operational" : "degraded",
     database: "operational",
     deliveryQueue: configured ? "operational" : "fallback",
     pendingDeliveries: Number(row.pending || 0),
     oldestPendingSeconds: oldest,
+    pendingDispatchJobs: Number(outbox.pending || 0),
+    publishingDispatchJobs: Number(outbox.publishing || 0),
+    dispatchErrors: Number(outbox.errors || 0),
+    oldestDispatchSeconds: oldestDispatch,
     lastDeliveryAt: row.last_delivery_at ? new Date(String(row.last_delivery_at)).toISOString() : null,
     checkedAt: new Date().toISOString()
   };
@@ -62,7 +97,7 @@ export async function readSystemHealth(projectId?: string): Promise<SystemHealth
 
 export async function readPublicHealth(): Promise<PublicHealth> {
   const health = await readSystemHealth();
-  const deliveryState: ServiceState = health.oldestPendingSeconds >= 300 ? "degraded" : "operational";
+  const deliveryState: ServiceState = health.oldestPendingSeconds >= 300 || health.oldestDispatchSeconds >= 300 ? "degraded" : "operational";
   return {
     status: deliveryState,
     services: {

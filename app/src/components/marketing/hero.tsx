@@ -7,9 +7,9 @@ export function MarketingHero() {
     <div className="future-hero-copy" data-reveal>
       <span className="signal-label"><i /> Global webhook infrastructure · Built for production teams</span>
       <h1>Webhook infrastructure, your team can operate.</h1>
-      <p>Receive callbacks from payment, commerce, and SaaS providers, or send customer-facing events through one control plane with verification, durable retries, replay, and delivery evidence.</p>
+      <p>Receive provider callbacks or send customer-facing events through one control plane. PayloadGrid records delivery intent transactionally, then handles verification, asynchronous fan-out, retries, replay, and evidence.</p>
       <div className="hero-actions"><Link className="button primary large" href="/signup">Start building free <ArrowRight size={18} /></Link><Link className="button secondary large" href="/playground"><Code2 size={18} /> Open playground</Link></div>
-      <div className="trust-line"><span><Check size={15} />Free 10,000 events / month</span><span><Check size={15} /> Inbound + outbound</span><span><Check size={15} /> Organizations + projects</span></div>
+      <div className="trust-line"><span><Check size={15} /> Free 10,000 events / month</span><span><Check size={15} /> Transactional acceptance</span><span><Check size={15} /> Inbound + outbound</span></div>
     </div>
     <div className="control-plane" data-reveal aria-label="PayloadGrid delivery control plane">
       <div className="plane-topbar"><div><span /><span /><span /></div><code>payloadgrid / production / live</code><i><Radio size={12} /> CONNECTED</i></div>

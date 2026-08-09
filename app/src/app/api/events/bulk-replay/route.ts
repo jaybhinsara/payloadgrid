@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { scheduleReplay, type ReplayTarget } from "@/lib/delivery-operations";
-import { processDelivery } from "@/lib/delivery-worker";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 import { requireSql } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -32,10 +32,9 @@ export async function POST(request: Request) {
     if (!targets.length) return NextResponse.json({ ok: false, error: "No replayable deliveries found" }, { status: 404 });
 
     const results = await Promise.all(targets.map((target) => scheduleReplay(target)));
-    const fallbackIds = results.filter((result) => !result.scheduled).map((result) => result.eventId);
-    if (fallbackIds.length) after(async () => { for (const id of fallbackIds) await processDelivery(id); });
+    after(() => dispatchOutboxBatch(results.length));
     await writeAudit(context.organization.id, context.user.id, "event.bulk_replay_accepted", "event", undefined, {
-      requested: uniqueIds.length, accepted: results.length, fallback: fallbackIds.length
+      requested: uniqueIds.length, accepted: results.length, dispatchMode: "outbox"
     });
     return NextResponse.json({ ok: true, accepted: results.length, skipped: uniqueIds.length - results.length, results }, { status: 202 });
   } catch (error) {

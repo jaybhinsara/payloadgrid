@@ -6,21 +6,22 @@ Documentation:
 
 - [Platform guide](docs/PLATFORM_GUIDE.md): concepts, dashboard modules, configuration examples, event flows, operations, and troubleshooting
 - [Architecture](docs/ARCHITECTURE.md): tenant boundaries, delivery sequences, and runtime topology
+- [Production readiness](docs/PRODUCTION_READINESS.md): implemented controls, validation gates, and external infrastructure work
 
 ## Implemented
 
 - Email/password and optional Google and GitHub accounts, email verification, password reset, secure HTTP-only sessions
 - Organizations, roles, projects, applications, team invitations, and tenant-scoped queries
-- Hashed API keys, idempotent message acceptance, event subscriptions, and transformations
-- Durable asynchronous delivery jobs with atomic database claiming and a Vercel `after` fallback
+- Scoped, hashed API keys, idempotent single and batch message acceptance, event subscriptions, and transformations
+- Transactional database outbox, asynchronous QStash publication, stale-job recovery, and atomic worker claiming
 - Automatic retry scheduling, manual replay, complete attempt capture, and failure alerts
 - Razorpay, Cashfree, Stripe, and Shopify raw-body signature verification
-- AES-256-GCM encryption for provider verification secrets
+- AES-256-GCM encryption for provider verification secrets and destination authorization headers
 - HMAC-SHA256 signing for PayloadGrid outbound delivery
 - HTTPS enforcement, private-address SSRF checks, payload limits, rate limits, and duplicate protection
 - Three-day payload retention with scheduled redaction
 - Public documentation, OpenAPI description, pricing, security, privacy, terms, contact, status, and no-signup playground
-- Source-ready Node.js and Python clients under `sdks/` (not published yet)
+- Published npm CLI (`payloadgrid-cli`) plus source-ready TypeScript, Python, and React embed packages under `packages/`
 
 ## Local setup
 
@@ -88,11 +89,15 @@ Create an Upstash QStash account and add:
 - `QSTASH_CURRENT_SIGNING_KEY`
 - `QSTASH_NEXT_SIGNING_KEY`
 
-PayloadGrid publishes one signed job per delivery to `/api/jobs/deliver`. The worker atomically claims each database event, so QStash retries cannot create duplicate attempts. Without QStash, Vercel `after` performs best-effort delivery and the database retains queued events, but this fallback is not a production durability guarantee.
+PayloadGrid commits each message, endpoint fan-out, and dispatch row in one database transaction. A dispatcher publishes those outbox rows to `/api/jobs/deliver`. The worker atomically claims each event, so QStash retries or stale-job recovery cannot process one attempt concurrently. Without QStash, the dispatcher can process jobs directly through Vercel `after`; the scheduled dispatcher remains required to recover work after an interrupted request.
 
-Configure three protected schedules in QStash. For free-plan testing, use hourly retry recovery and monitoring to conserve message quota; production frequency should follow the required recovery target and QStash plan:
+Configure four protected schedules in QStash. For free-plan testing, run dispatch, retry recovery, and monitoring hourly to conserve message quota; production frequency must follow the measured recovery objective and QStash plan:
 
 ```text
+GET https://YOUR_DOMAIN/api/cron/dispatch
+Authorization: Bearer YOUR_CRON_SECRET
+Schedule: hourly for free-plan testing
+
 GET https://YOUR_DOMAIN/api/cron/retry-failed
 Authorization: Bearer YOUR_CRON_SECRET
 Schedule: hourly for free-plan testing
@@ -106,7 +111,7 @@ Authorization: Bearer YOUR_CRON_SECRET
 Schedule: hourly for free-plan testing
 ```
 
-The first route drains stranded queued/retry events. The second redacts expired payloads and removes expired sessions and rate-limit windows. The monitoring route records customer-facing service checks, opens an incident after three consecutive failures, and resolves it after two consecutive healthy checks.
+The dispatch route publishes pending outbox rows and recovers missing or stale dispatch jobs. Retry recovery resets stale workers and performs the same outbox recovery. Maintenance redacts expired payloads, erases expired rotation secrets, and removes expired operational records. Monitoring records customer-facing service checks, opens an incident after three consecutive failures, and resolves it after two consecutive healthy checks.
 
 ## Transactional email
 
@@ -149,6 +154,7 @@ When creating a Razorpay, Cashfree, Stripe, or Shopify endpoint, enter the corre
 ```powershell
 cd app
 npm.cmd run typecheck
+npm.cmd test
 npm.cmd run build
 ```
 

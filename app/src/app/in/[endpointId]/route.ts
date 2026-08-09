@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { amountFromPayload, eventTypeFromPayload, providerEventIdFromPayload, safeCapturedHeaders, type Provider } from "@/lib/constants";
 import { evaluateCircuitBreaker, notifyCircuitOpened } from "@/lib/circuit-breaker";
 import { requireSql } from "@/lib/db";
-import { processDelivery } from "@/lib/delivery-worker";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 import { enforceInboundRateLimit, enforceMonthlyMessageLimit, UsageLimitError } from "@/lib/limits";
 import { parseInboundBody } from "@/lib/inbound-content";
 import { verifyProviderWebhook } from "@/lib/provider-verification";
-import { enqueueDelivery, queueConfigured } from "@/lib/queue";
+import { queueConfigured } from "@/lib/queue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,21 +48,23 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     if (circuit.newlyOpened) after(() => notifyCircuitOpened({ id: String(endpoint.id), projectId: String(endpoint.project_id), name: String(endpoint.name), enabled: true, threshold: Number(endpoint.circuit_breaker_threshold), state: "open" }, Number(circuit.current || 0)));
     const initialStatus = circuit.open ? "buffered" : "queued";
     const [event] = await sql`
-      insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type,
-        request_headers, request_body, request_content_type, request_raw_body, status, revenue_amount, revenue_currency, max_retries)
-      values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType},
-        ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, ${parsed.contentType}, ${parsed.rawBody}, ${initialStatus}, ${revenue.amount}, ${revenue.currency}, 6)
-      on conflict (endpoint_id, provider_event_id) where provider_event_id is not null do nothing
-      returning id
+      with inserted_event as (
+        insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type,
+          request_headers, request_body, request_content_type, request_raw_body, status, revenue_amount, revenue_currency, max_retries)
+        values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType},
+          ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, ${parsed.contentType}, ${parsed.rawBody}, ${initialStatus}, ${revenue.amount}, ${revenue.currency}, 6)
+        on conflict (endpoint_id, provider_event_id) where provider_event_id is not null do nothing
+        returning id, status
+      ), inserted_job as (
+        insert into dispatch_jobs (event_id, status, available_at)
+        select id, 'pending', now() from inserted_event where status = 'queued'
+        returning event_id
+      )
+      select id, status, exists(select 1 from inserted_job) as dispatch_pending from inserted_event
     `;
     if (!event) return NextResponse.json({ ok: true, duplicate: true, status: "accepted" }, { status: 200 });
     if (circuit.open) return NextResponse.json({ ok: true, eventId: event.id, status: "buffered", circuitOpen: true }, { status: 202, headers: { "x-payloadgrid-event-id": String(event.id) } });
-    let scheduled = false;
-    try {
-      const queued = await enqueueDelivery({ eventId: String(event.id), endpointId: String(endpoint.id), attempt: 1, rateLimitPerMinute: Number(endpoint.rate_limit_per_minute) });
-      scheduled = queued.queued;
-    } catch { scheduled = false; }
-    if (!scheduled) after(() => processDelivery(String(event.id)));
+    if (event.dispatch_pending) after(() => dispatchOutboxBatch(1, String(event.id)));
     return NextResponse.json({ ok: true, eventId: event.id, status: "accepted", verified: verification.verified, queueConfigured: queueConfigured() }, { status: 200, headers: { "x-payloadgrid-event-id": String(event.id) } });
   } catch (error) {
     const status = error instanceof UsageLimitError ? error.status : 500;

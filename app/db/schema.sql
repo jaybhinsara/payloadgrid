@@ -125,8 +125,13 @@ create table if not exists endpoints (
   application_id uuid references applications(id) on delete cascade,
   name text not null,
   provider text not null default 'custom',
+  destination_type text not null default 'webhook' check (destination_type in ('webhook')),
   destination_url text not null,
   signing_secret text,
+  previous_signing_secret text,
+  previous_signing_secret_expires_at timestamptz,
+  delivery_headers_encrypted text,
+  delivery_header_names text[] not null default '{}'::text[],
   description text,
   rate_limit_per_minute integer not null default 120,
   circuit_breaker_enabled boolean not null default false,
@@ -140,7 +145,12 @@ create table if not exists endpoints (
 );
 
 alter table endpoints add column if not exists application_id uuid references applications(id) on delete cascade;
+alter table endpoints add column if not exists destination_type text not null default 'webhook';
 alter table endpoints add column if not exists signing_secret text;
+alter table endpoints add column if not exists previous_signing_secret text;
+alter table endpoints add column if not exists previous_signing_secret_expires_at timestamptz;
+alter table endpoints add column if not exists delivery_headers_encrypted text;
+alter table endpoints add column if not exists delivery_header_names text[] not null default '{}'::text[];
 alter table endpoints add column if not exists description text;
 alter table endpoints add column if not exists rate_limit_per_minute integer not null default 120;
 alter table endpoints add column if not exists deleted_at timestamptz;
@@ -242,6 +252,28 @@ create table if not exists delivery_attempts (
 alter table delivery_attempts add column if not exists request_headers jsonb not null default '{}'::jsonb;
 alter table delivery_attempts add column if not exists response_headers jsonb not null default '{}'::jsonb;
 
+create table if not exists dispatch_jobs (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null unique references webhook_events(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'publishing', 'published')),
+  available_at timestamptz not null default now(),
+  publish_attempts integer not null default 0,
+  qstash_message_id text,
+  last_error text,
+  locked_at timestamptz,
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table dispatch_jobs add column if not exists available_at timestamptz not null default now();
+alter table dispatch_jobs add column if not exists publish_attempts integer not null default 0;
+alter table dispatch_jobs add column if not exists qstash_message_id text;
+alter table dispatch_jobs add column if not exists last_error text;
+alter table dispatch_jobs add column if not exists locked_at timestamptz;
+alter table dispatch_jobs add column if not exists published_at timestamptz;
+alter table dispatch_jobs add column if not exists updated_at timestamptz not null default now();
+
 alter table endpoints add column if not exists provider_secret_encrypted text;
 alter table endpoints add column if not exists provider_verification_required boolean not null default false;
 alter table endpoints add column if not exists provider_secret_hint text;
@@ -252,12 +284,15 @@ create table if not exists api_keys (
   name text not null,
   key_prefix text not null,
   key_hash text not null unique,
+  scopes text[] not null default array['messages:write','events:read']::text[],
   last_used_at timestamptz,
   expires_at timestamptz,
   revoked_at timestamptz,
   created_by uuid references users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+alter table api_keys add column if not exists scopes text[] not null default array['messages:write','events:read']::text[];
 
 create table if not exists api_usage_windows (
   api_key_id uuid not null references api_keys(id) on delete cascade,
@@ -353,6 +388,8 @@ create index if not exists webhook_events_queue_idx on webhook_events(status, re
 create unique index if not exists webhook_events_provider_dedup_idx on webhook_events(endpoint_id, provider_event_id) where provider_event_id is not null;
 create index if not exists webhook_events_payload_expiry_idx on webhook_events(payload_expires_at) where payload_redacted_at is null;
 create index if not exists delivery_attempts_event_id_idx on delivery_attempts(event_id);
+create index if not exists dispatch_jobs_pending_idx on dispatch_jobs(available_at, created_at) where status = 'pending';
+create index if not exists dispatch_jobs_stale_idx on dispatch_jobs(locked_at) where status = 'publishing';
 create index if not exists api_keys_project_id_idx on api_keys(project_id);
 create index if not exists transformations_project_id_idx on transformations(project_id);
 create index if not exists alert_rules_project_id_idx on alert_rules(project_id);

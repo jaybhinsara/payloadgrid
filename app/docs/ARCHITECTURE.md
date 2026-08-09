@@ -19,18 +19,23 @@ Every console API resolves the current session and project on the server. Resour
 2. PayloadGrid hashes the supplied key and resolves its project.
 3. An idempotency key lookup prevents duplicate messages.
 4. Active transformations are applied to the payload.
-5. PayloadGrid selects active endpoints for the application and event subscription.
-6. Each delivery receives a persistent event ID and endpoint-specific HMAC signature.
-7. The response, headers, status, body, error, and latency are stored.
-8. Failed deliveries are scheduled using increasing retry intervals.
-9. Alert rules are evaluated against failures in their configured time window.
+5. One database transaction stores the message, creates every matching endpoint delivery, and inserts one dispatch outbox row per delivery.
+6. The API returns `202 Accepted`; a background dispatcher publishes pending outbox rows to QStash.
+7. Each worker atomically claims a delivery and signs its exact outgoing body.
+8. The response, headers, status, body, error, and latency are stored.
+9. A failed attempt and its delayed retry outbox row commit together.
+10. Alert rules are evaluated against failures in their configured time window.
 
 ## Inbound sequence
 
-A provider posts to `/in/:endpointId`. PayloadGrid stores the original headers and payload, derives the provider event type and ID, forwards the event to the endpoint destination with a PayloadGrid signature, and uses the same attempt/retry/alert pipeline as outbound messages.
+A provider posts to `/in/:endpointId`. PayloadGrid verifies the untouched raw body, then atomically stores the event and its dispatch outbox row. The request is acknowledged before forwarding. The dispatcher and worker use the same attempt, retry, alert, and dead-letter pipeline as outbound messages.
 
 ## Runtime topology and scaling path
 
-Vercel serves the Next.js control plane, public API, inbound routes, and delivery worker route. Neon is the source of truth. QStash provides durable delivery jobs, delayed retries, request verification, per-endpoint flow control, and attempt-level deduplication. Workers claim database events atomically so duplicate queue delivery cannot process one attempt concurrently.
+Vercel serves the Next.js control plane, public API, inbound routes, outbox dispatcher, and delivery worker route. Neon is the source of truth for accepted messages, endpoint fan-out, dispatch intent, retry state, and attempts. QStash provides signed delivery jobs, delayed execution, request verification, and per-endpoint flow control. Workers claim database events atomically so duplicate queue delivery cannot process one attempt concurrently.
 
-The direct Vercel `after` path is a best-effort fallback when QStash publishing is unavailable; it is not the production durability path. At sustained volume that requires continuous consumers, strict ordering, or infrastructure-independent worker availability, move the delivery worker to an always-running service while retaining the Vercel control plane and Neon state model.
+Vercel `after` starts low-latency dispatch after an accepted response, while protected schedules recover pending, stale, or missing outbox work. When QStash is not configured, the dispatcher executes work directly; that mode is suitable for local development, not a production durability promise. At sustained volume requiring continuous consumers, strict ordering, static egress, or infrastructure-independent workers, move dispatch and delivery workers to an always-running service while retaining the control plane and outbox contract.
+
+## Capacity boundary
+
+The public API supports one event per request or bounded batches of at most 100 events, 4 MB per batch, and 256 KB per event. Fan-out is set based, not sequential in application code. Queue publication is decoupled from acceptance through the outbox. These properties remove request-time fan-out as a bottleneck, but throughput claims must come from repeatable load and failure tests against the deployed provider plans. The repository includes k6 profiles under `load/`; no unmeasured requests-per-second or SLA claim is implied.

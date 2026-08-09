@@ -3,8 +3,7 @@ import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { requireSql } from "@/lib/db";
-import { processDelivery } from "@/lib/delivery-worker";
-import { enqueueDelivery } from "@/lib/queue";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 
 export const runtime = "nodejs";
 
@@ -33,28 +32,26 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const rawBody = JSON.stringify(body.payload);
     const initialStatus = String(source.circuit_state) === "open" ? "buffered" : "queued";
     const [simulation] = await sql`
-      insert into webhook_events (
-        endpoint_id, application_id, direction, provider, event_type, request_headers,
-        request_body, request_raw_body, request_content_type, status, max_retries,
-        is_simulation, parent_event_id
-      ) values (
-        ${source.endpoint_id}, ${source.application_id}, ${source.direction}, 'payloadgrid-sandbox', ${source.event_type},
-        ${JSON.stringify(body.headers)}::jsonb, ${rawBody}::jsonb, ${rawBody}, 'application/json',
-        ${initialStatus}, 1, true, ${eventId}
-      ) returning id
+      with inserted_event as (
+        insert into webhook_events (
+          endpoint_id, application_id, direction, provider, event_type, request_headers,
+          request_body, request_raw_body, request_content_type, status, max_retries,
+          is_simulation, parent_event_id
+        ) values (
+          ${source.endpoint_id}, ${source.application_id}, ${source.direction}, 'payloadgrid-sandbox', ${source.event_type},
+          ${JSON.stringify(body.headers)}::jsonb, ${rawBody}::jsonb, ${rawBody}, 'application/json',
+          ${initialStatus}, 1, true, ${eventId}
+        ) returning id, status
+      ), inserted_job as (
+        insert into dispatch_jobs (event_id, status, available_at)
+        select id, 'pending', now() from inserted_event where status = 'queued'
+        returning event_id
+      )
+      select id, exists(select 1 from inserted_job) as scheduled from inserted_event
     `;
 
-    let scheduled = false;
-    if (initialStatus === "queued") {
-      try {
-        const queued = await enqueueDelivery({
-          eventId: String(simulation.id), endpointId: String(source.endpoint_id), attempt: 1,
-          rateLimitPerMinute: Number(source.rate_limit_per_minute || 120)
-        });
-        scheduled = queued.queued;
-      } catch { scheduled = false; }
-      if (!scheduled) after(() => processDelivery(String(simulation.id)));
-    }
+    const scheduled = Boolean(simulation.scheduled);
+    if (scheduled) after(() => dispatchOutboxBatch(1, String(simulation.id)));
     await writeAudit(context.organization.id, context.user.id, "event.simulation_created", "event", String(simulation.id), { sourceEventId: eventId });
     return NextResponse.json({ ok: true, eventId: simulation.id, status: initialStatus, scheduled }, { status: 202 });
   } catch (error) {

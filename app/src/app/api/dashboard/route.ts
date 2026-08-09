@@ -19,7 +19,7 @@ export async function GET() {
       sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
       sql`
         select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active,
-          ep.circuit_breaker_enabled, ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.created_at,
+          ep.delivery_header_names, ep.circuit_breaker_enabled, ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.created_at,
           coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
         from endpoints ep where ep.project_id = ${context.project.id} and ep.deleted_at is null order by ep.created_at desc
       `,
@@ -43,7 +43,7 @@ export async function GET() {
       `,
       sql`select id, application_id, event_type, status, created_at from messages where project_id = ${context.project.id} order by created_at desc limit 50`,
       sql`select id, name, description, schema, created_at from event_types where project_id = ${context.project.id} order by name asc`,
-      sql`select id, name, key_prefix, last_used_at, revoked_at, created_at from api_keys where project_id = ${context.project.id} order by created_at desc`,
+      sql`select id, name, key_prefix, scopes, last_used_at, revoked_at, created_at from api_keys where project_id = ${context.project.id} order by created_at desc`,
       sql`select u.id, u.name, u.email, om.role, om.created_at from organization_members om join users u on u.id = om.user_id where om.organization_id = ${context.organization.id} order by om.created_at asc`,
       sql`select id, name, event_type, config, is_active, created_at from transformations where project_id = ${context.project.id} order by created_at desc`,
       sql`select id, name, channel, destination, failure_threshold, window_minutes, is_active, created_at from alert_rules where project_id = ${context.project.id} order by created_at desc`,

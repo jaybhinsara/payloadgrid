@@ -1,0 +1,20 @@
+{
+  "name": "payloadgrid-cli",
+  "version": "0.1.0",
+  "description": "PayloadGrid local webhook relay",
+  "keywords": ["payloadgrid", "webhook", "relay", "localhost", "developer-tools"],
+  "homepage": "https://payloadgrid.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaybhinsara/hookin.git",
+    "directory": "app/packages/cli"
+  },
+  "bugs": { "url": "https://github.com/jaybhinsara/hookin/issues" },
+  "type": "module",
+  "bin": { "payloadgrid": "bin/payloadgrid.mjs", "pg": "bin/payloadgrid.mjs" },
+  "engines": { "node": ">=20" },
+  "files": ["bin", "README.md", "LICENSE"],
+  "license": "MIT",
+  "author": "PayloadGrid",
+  "publishConfig": { "access": "public" }
+}

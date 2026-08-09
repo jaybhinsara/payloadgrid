@@ -1,7 +1,18 @@
 import { notifyFailure } from "@/lib/alerts";
 import { requireSql } from "@/lib/db";
-import { deliverWebhook, nextRetryDelayMinutes, shouldRetry } from "@/lib/delivery";
-import { enqueueDelivery } from "@/lib/queue";
+import { nextRetryDelayMinutes, shouldRetry } from "@/lib/delivery";
+import { deliverToDestination, type DestinationType } from "@/lib/destination-adapters";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
+import { decryptSecret } from "@/lib/security";
+
+export type DeliveryProcessResult = {
+  processed: boolean;
+  reason?: string;
+  status?: string;
+  attempt?: number;
+  responseStatus?: number | null;
+  retryScheduled?: boolean;
+};
 
 export async function updateMessageStatus(messageId: string) {
   const sql = requireSql();
@@ -27,7 +38,7 @@ export async function updateMessageStatus(messageId: string) {
   `;
 }
 
-export async function processDelivery(eventId: string) {
+export async function processDelivery(eventId: string): Promise<DeliveryProcessResult> {
   const sql = requireSql();
   const [claimed] = await sql`
     update webhook_events set status = 'processing', locked_at = now(), updated_at = now()
@@ -40,7 +51,9 @@ export async function processDelivery(eventId: string) {
   `;
   if (!claimed) return { processed: false, reason: "Event is already processing, completed, or not due" };
   const [endpoint] = await sql`
-    select ep.project_id, ep.destination_url, ep.signing_secret, ep.is_active, ep.rate_limit_per_minute,
+    select ep.project_id, ep.destination_type, ep.destination_url, ep.signing_secret, ep.delivery_headers_encrypted,
+      case when ep.previous_signing_secret_expires_at > now() then ep.previous_signing_secret else null end as previous_signing_secret,
+      ep.is_active, ep.rate_limit_per_minute,
       p.payload_retention_mode
     from endpoints ep join projects p on p.id = ep.project_id where ep.id = ${claimed.endpoint_id} limit 1
   `;
@@ -53,12 +66,18 @@ export async function processDelivery(eventId: string) {
   const attempt = Number(attemptRow.count || 0) + 1;
   const maxRetries = Number(claimed.max_retries || 6);
   const mode = claimed.direction === "inbound" ? (attempt === 1 ? "forward" : "retry") : (attempt === 1 ? "outbound" : "retry");
-  const headers = { "payloadgrid-event-type": String(claimed.event_type) };
-  const delivery = await deliverWebhook(
-    String(endpoint.destination_url), claimed.request_body, mode, headers,
-    endpoint.signing_secret ? { secret: String(endpoint.signing_secret), deliveryId: String(claimed.id) } : undefined,
-    { rawBody: claimed.request_raw_body ? String(claimed.request_raw_body) : null, contentType: String(claimed.request_content_type || "application/json") }
-  );
+  let customHeaders: Record<string, string> = {};
+  if (endpoint.delivery_headers_encrypted) {
+    try { customHeaders = JSON.parse(decryptSecret(String(endpoint.delivery_headers_encrypted))) as Record<string, string>; }
+    catch { customHeaders = {}; }
+  }
+  const headers = { ...customHeaders, "payloadgrid-event-type": String(claimed.event_type) };
+  const delivery = await deliverToDestination({
+    type: String(endpoint.destination_type || "webhook") as DestinationType,
+    url: String(endpoint.destination_url), payload: claimed.request_body, mode, headers,
+    signing: endpoint.signing_secret ? { secret: String(endpoint.signing_secret), previousSecret: endpoint.previous_signing_secret ? String(endpoint.previous_signing_secret) : null, deliveryId: String(claimed.id) } : undefined,
+    content: { rawBody: claimed.request_raw_body ? String(claimed.request_raw_body) : null, contentType: String(claimed.request_content_type || "application/json") }
+  });
   const willRetry = !delivery.ok && shouldRetry(attempt, maxRetries);
   const status = delivery.ok ? "delivered" : willRetry ? "retrying" : "dead_letter";
   const retryDelayMinutes = willRetry ? nextRetryDelayMinutes(attempt) : 0;
@@ -67,12 +86,22 @@ export async function processDelivery(eventId: string) {
     values (${claimed.id}, ${attempt}, ${endpoint.destination_url}, ${JSON.stringify(headers)}::jsonb, ${delivery.status}, ${JSON.stringify(delivery.responseHeaders)}::jsonb, ${delivery.body}, ${delivery.error}, ${delivery.latencyMs})
   `;
   await sql`
-    update webhook_events set status = ${status}, locked_at = null, retry_count = ${delivery.ok ? Math.max(0, attempt - 1) : attempt},
-      revenue_at_risk = case when ${delivery.ok} then 0 else revenue_amount end,
-      next_retry_at = case when ${willRetry} then now() + (${retryDelayMinutes} * interval '1 minute') else null end,
-      dead_lettered_at = case when ${status === "dead_letter"} then now() else null end, cancelled_at = null,
-      last_error = ${delivery.error || (delivery.ok ? null : `Destination HTTP ${delivery.status}`)}, updated_at = now()
-    where id = ${claimed.id}
+    with updated_event as (
+      update webhook_events set status = ${status}, locked_at = null, retry_count = ${delivery.ok ? Math.max(0, attempt - 1) : attempt},
+        revenue_at_risk = case when ${delivery.ok} then 0 else revenue_amount end,
+        next_retry_at = case when ${willRetry} then now() + (${retryDelayMinutes} * interval '1 minute') else null end,
+        dead_lettered_at = case when ${status === "dead_letter"} then now() else null end, cancelled_at = null,
+        last_error = ${delivery.error || (delivery.ok ? null : `Destination HTTP ${delivery.status}`)}, updated_at = now()
+      where id = ${claimed.id}
+      returning id
+    ), retry_job as (
+      insert into dispatch_jobs (event_id, status, available_at, last_error, locked_at, qstash_message_id, published_at, updated_at)
+      select id, 'pending', now(), null, null, null, null, now() from updated_event where ${willRetry}
+      on conflict (event_id) do update set status = 'pending', available_at = now(), last_error = null,
+        locked_at = null, qstash_message_id = null, published_at = null, updated_at = now()
+      returning event_id
+    )
+    select id from updated_event
   `;
   if (String(endpoint.payload_retention_mode) === "transient" && !willRetry) {
     await sql`
@@ -86,8 +115,8 @@ export async function processDelivery(eventId: string) {
   let retryScheduled = false;
   if (willRetry) {
     try {
-      const queued = await enqueueDelivery({ eventId: String(claimed.id), endpointId: String(claimed.endpoint_id), attempt: attempt + 1, delaySeconds: retryDelayMinutes * 60, rateLimitPerMinute: Number(endpoint.rate_limit_per_minute) });
-      retryScheduled = queued.queued;
+      const dispatched: { published: number; deferred: number } = await dispatchOutboxBatch(1, String(claimed.id));
+      retryScheduled = dispatched.published > 0 || dispatched.deferred > 0;
     } catch { retryScheduled = false; }
   }
   return { processed: true, status, attempt, responseStatus: delivery.status, retryScheduled };

@@ -4,6 +4,7 @@ import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { enforceMonthlyMessageLimit, UsageLimitError } from "@/lib/limits";
 import { acceptMessage } from "@/lib/outbound";
+import { assertPayloadSize } from "@/lib/payload-limits";
 
 const schema = z.object({ applicationId: z.string().uuid(), eventType: z.string().trim().min(1).max(120), payload: z.unknown() });
 export async function POST(request: Request) {
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
     const context = await requireSession(); requireRole(context, ["owner", "admin", "developer"]);
     await enforceMonthlyMessageLimit(context.project.id);
     const body = schema.parse(await request.json());
+    assertPayloadSize(body.payload);
     const result = await acceptMessage({ projectId: context.project.id, applicationId: body.applicationId, eventType: body.eventType, payload: body.payload, idempotencyKey: request.headers.get("idempotency-key") });
     await writeAudit(context.organization.id, context.user.id, "message.accepted", "message", result.messageId, { eventType: body.eventType });
     return NextResponse.json({ ok: true, ...result }, { status: result.duplicate ? 200 : 202 });

@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { requireSql } from "@/lib/db";
-import { processDelivery } from "@/lib/delivery-worker";
-import { enqueueDelivery, queueConfigured } from "@/lib/queue";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
+import { queueConfigured } from "@/lib/queue";
 
 export type AcceptMessageInput = {
   projectId: string;
@@ -50,47 +51,56 @@ export async function acceptMessage(input: AcceptMessageInput) {
   const sql = requireSql();
   const [application] = await sql`select id from applications where id = ${input.applicationId} and project_id = ${input.projectId} limit 1`;
   if (!application) throw new Error("Application not found in this project");
-  if (input.idempotencyKey) {
-    const [existing] = await sql`select id, status from messages where project_id = ${input.projectId} and idempotency_key = ${input.idempotencyKey} limit 1`;
-    if (existing) return { messageId: String(existing.id), status: String(existing.status), duplicate: true, queuedDeliveries: 0, queueConfigured: queueConfigured() };
-  }
   const transformations = await sql`
     select config from transformations where project_id = ${input.projectId} and is_active = true
       and (event_type is null or event_type = ${input.eventType}) order by created_at asc
   `;
   const payload = transformPayload(input.payload, transformations.map((row) => row.config));
-  const [message] = await sql`
-    insert into messages (project_id, application_id, event_type, idempotency_key, payload, status)
-    values (${input.projectId}, ${input.applicationId}, ${input.eventType}, ${input.idempotencyKey || null}, ${JSON.stringify(payload)}::jsonb, 'queued') returning id
+  const messageId = randomUUID();
+  const [accepted] = await sql`
+    with accepted_message as (
+      insert into messages (id, project_id, application_id, event_type, idempotency_key, payload, status)
+      values (${messageId}, ${input.projectId}, ${input.applicationId}, ${input.eventType}, ${input.idempotencyKey || null}, ${JSON.stringify(payload)}::jsonb, 'queued')
+      on conflict (project_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key
+      returning id, id = ${messageId}::uuid as inserted
+    ), inserted_events as (
+      insert into webhook_events (
+        endpoint_id, application_id, message_id, direction, provider, provider_event_id,
+        event_type, request_body, status, max_retries
+      )
+      select ep.id, ${input.applicationId}, am.id, 'outbound', 'payloadgrid', am.id::text,
+        ${input.eventType}, ${JSON.stringify(payload)}::jsonb,
+        case when ep.circuit_state = 'open' then 'buffered' else 'queued' end, 6
+      from accepted_message am
+      join endpoints ep on ep.project_id = ${input.projectId} and ep.application_id = ${input.applicationId}
+        and ep.is_active = true and ep.deleted_at is null
+      where am.inserted and (
+        not exists (select 1 from endpoint_subscriptions s where s.endpoint_id = ep.id)
+        or exists (select 1 from endpoint_subscriptions s where s.endpoint_id = ep.id and s.event_type = ${input.eventType})
+      )
+      returning id, status
+    ), inserted_jobs as (
+      insert into dispatch_jobs (event_id, status, available_at)
+      select id, 'pending', now() from inserted_events where status = 'queued'
+      returning event_id
+    ), finalize_empty as (
+      update messages m set status = 'delivered', updated_at = now()
+      from accepted_message am
+      where m.id = am.id and am.inserted and not exists (select 1 from inserted_events)
+      returning m.id
+    )
+    select am.id, am.inserted,
+      (select status from messages where id = am.id) as status,
+      (select count(*)::int from inserted_events) as delivery_count,
+      (select count(*)::int from inserted_jobs) as dispatch_count
+    from accepted_message am
   `;
-  const endpoints = await sql`
-    select ep.id, ep.rate_limit_per_minute, ep.circuit_state from endpoints ep
-    where ep.project_id = ${input.projectId} and ep.application_id = ${input.applicationId} and ep.is_active = true
-      and (not exists (select 1 from endpoint_subscriptions s where s.endpoint_id = ep.id)
-        or exists (select 1 from endpoint_subscriptions s where s.endpoint_id = ep.id and s.event_type = ${input.eventType}))
-    order by ep.created_at asc
-  `;
-  const jobs: Array<{ eventId: string; queued: boolean }> = [];
-  for (const endpoint of endpoints) {
-    const [event] = await sql`
-      insert into webhook_events (endpoint_id, application_id, message_id, direction, provider, provider_event_id, event_type, request_body, status, max_retries)
-      values (${endpoint.id}, ${input.applicationId}, ${message.id}, 'outbound', 'payloadgrid', ${message.id}, ${input.eventType}, ${JSON.stringify(payload)}::jsonb, ${String(endpoint.circuit_state) === "open" ? "buffered" : "queued"}, 6) returning id
-    `;
-    if (String(endpoint.circuit_state) === "open") {
-      jobs.push({ eventId: String(event.id), queued: false });
-      continue;
-    }
-    let queued = false;
-    try {
-      const result = await enqueueDelivery({ eventId: String(event.id), endpointId: String(endpoint.id), attempt: 1, rateLimitPerMinute: Number(endpoint.rate_limit_per_minute) });
-      queued = result.queued;
-    } catch { queued = false; }
-    jobs.push({ eventId: String(event.id), queued });
-    if (!queued) after(() => processDelivery(String(event.id)));
-  }
-  if (!endpoints.length) await sql`update messages set status = 'delivered', updated_at = now() where id = ${message.id}`;
+  const duplicate = !Boolean(accepted.inserted);
+  const dispatchCount = Number(accepted.dispatch_count || 0);
+  if (dispatchCount) after(() => dispatchOutboxBatch(Math.min(dispatchCount, 100)));
   return {
-    messageId: String(message.id), status: endpoints.length ? "accepted" : "delivered", duplicate: false,
-    queuedDeliveries: endpoints.length, scheduledDeliveries: jobs.filter((job) => job.queued).length, queueConfigured: queueConfigured()
+    messageId: String(accepted.id), status: duplicate ? String(accepted.status) : Number(accepted.delivery_count) ? "accepted" : "delivered",
+    duplicate, queuedDeliveries: duplicate ? 0 : Number(accepted.delivery_count || 0),
+    scheduledDeliveries: duplicate ? 0 : dispatchCount, queueConfigured: queueConfigured()
   };
 }

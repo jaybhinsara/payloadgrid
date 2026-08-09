@@ -93,6 +93,7 @@ An endpoint connects an application to a destination URL. It stores:
 - inbound URL;
 - outbound signing secret;
 - optional encrypted provider verification secret;
+- optional encrypted destination authorization headers;
 - subscribed event types;
 - active or paused state;
 - per-endpoint delivery rate configuration.
@@ -271,12 +272,9 @@ sequenceDiagram
 
     Producer->>API: POST /api/v1/messages
     API->>API: Authenticate key and enforce limits
-    API->>DB: Check idempotency key
-    API->>DB: Apply transformations and store message
-    API->>DB: Select matching active endpoints
-    API->>DB: Create one delivery per endpoint
-    API->>Queue: Publish signed delivery jobs
+    API->>DB: Atomically store message, fan-out deliveries, and outbox jobs
     API-->>Producer: 202 Accepted
+    API->>Queue: Dispatch committed outbox jobs
     Queue->>Worker: POST /api/jobs/deliver
     Worker->>DB: Atomically claim delivery
     Worker->>Destination: Signed POST request
@@ -293,6 +291,11 @@ Important behavior:
 - Paused endpoints do not receive new events.
 - QStash jobs use a delivery-attempt deduplication identifier.
 - The database worker claim prevents the same attempt from processing concurrently.
+- A protected dispatcher recovers outbox rows if request-time publication is interrupted.
+
+### Bounded batch intake
+
+`POST /api/v1/messages/batch` accepts up to 100 events in one request. The complete body is limited to 4 MB and every event remains limited to 256 KB. Each event has its own optional `idempotencyKey` and result, so one invalid application or routing failure does not erase successful items in the same accepted batch.
 
 ## 7. Sending from Node.js
 
@@ -382,9 +385,9 @@ sequenceDiagram
     Provider->>Ingest: Signed provider webhook
     Ingest->>Ingest: Verify signature against raw body
     Ingest->>DB: Deduplicate supported provider event ID
-    Ingest->>DB: Store event and safe diagnostic headers
-    Ingest->>Queue: Schedule forwarding
+    Ingest->>DB: Atomically store event, safe headers, and outbox job
     Ingest-->>Provider: 200 accepted
+    Ingest->>Queue: Dispatch committed outbox job
     Queue->>Destination: PayloadGrid-signed POST
     Destination-->>Queue: HTTP response
     Queue->>DB: Store attempt or schedule retry
@@ -411,7 +414,7 @@ Provider secret usage:
 | Shopify | Shopify app client secret | `X-Shopify-Hmac-SHA256` |
 | Custom | No provider verification secret | Payload is accepted as JSON and forwarded with PayloadGrid signing |
 
-Provider verification secrets are encrypted with AES-256-GCM using `PAYLOADGRID_ENCRYPTION_KEY` and are not shown again.
+Provider verification secrets and destination authorization-header values are encrypted with AES-256-GCM using `PAYLOADGRID_ENCRYPTION_KEY` and are not shown again. Header names remain visible for configuration diagnostics. Custom headers cannot override host, content length, content type, user agent, or PayloadGrid signature headers.
 
 ## 10. Delivery recovery
 
@@ -571,6 +574,7 @@ flowchart LR
 For low-volume free-plan testing, a quota-conscious starting point is:
 
 ```text
+GET /api/cron/dispatch       hourly
 GET /api/cron/retry-failed   hourly
 GET /api/cron/monitor        hourly
 GET /api/cron/maintenance    daily
@@ -603,6 +607,7 @@ The implemented project limits are:
 | Endpoints | 10 per project |
 | Team members | 5 per workspace |
 | Inbound payload | 256 KB |
+| Batch payload | 100 events / 4 MB total |
 | Payload retention | 3 days |
 
 Vercel, Neon, QStash, and Resend have separate infrastructure quotas. The application's displayed plan limits do not override provider quotas.
@@ -614,6 +619,7 @@ Implemented controls include:
 - server-side tenant and project scoping;
 - role-based dashboard mutations;
 - one-way API-key hashing;
+- least-privilege API-key scopes;
 - scrypt password hashing;
 - HTTP-only sessions;
 - raw-body provider verification;
@@ -624,9 +630,14 @@ Implemented controls include:
 - payload and request-rate limits;
 - event and queue deduplication;
 - audit history for sensitive changes;
-- scheduled payload redaction.
+- scheduled payload redaction;
+- transactional dispatch outbox and stale-job recovery;
+- dual signatures during a 24-hour signing-secret rotation window;
+- permission-scoped, short-lived embedded delivery views.
 
 These controls do not constitute SOC 2, ISO/IEC 27001, PCI DSS, HIPAA, or other formal certification. Do not display certification badges until the applicable independent process is complete.
+
+Regional data residency is intentionally not implemented in the current deployment. A future regional design requires independent Vercel and Neon data planes and an immutable organization-region assignment; Neon branches inside one project are not a residency boundary.
 
 ## 17. Troubleshooting
 

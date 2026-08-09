@@ -12,7 +12,7 @@ export type DeliveryResult = {
 };
 
 export type DeliveryMode = "forward" | "replay" | "retry" | "outbound";
-export type SigningContext = { secret: string; deliveryId: string };
+export type SigningContext = { secret: string; previousSecret?: string | null; deliveryId: string };
 export type DeliveryContent = { rawBody?: string | null; contentType?: string | null };
 
 export async function deliverWebhook(
@@ -26,10 +26,11 @@ export async function deliverWebhook(
   const started = Date.now();
   const body = content?.rawBody ?? JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signatures = signing ? [signing.secret, signing.previousSecret].filter(Boolean).map((secret) => `v1,${createWebhookSignature(String(secret), signing.deliveryId, timestamp, body)}`).join(" ") : null;
   const signedHeaders: Record<string, string> = signing ? {
     "payloadgrid-id": signing.deliveryId,
     "payloadgrid-timestamp": timestamp,
-    "payloadgrid-signature": `v1,${createWebhookSignature(signing.secret, signing.deliveryId, timestamp, body)}`
+    "payloadgrid-signature": String(signatures)
   } : {};
 
   try {

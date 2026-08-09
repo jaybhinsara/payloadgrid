@@ -1,12 +1,15 @@
-import { Activity, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, BellRing, Braces, Check, Clock3, Copy, Fingerprint, GitBranch, KeyRound, RefreshCw, Route, ShieldCheck, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, BellRing, Braces, Check, Clock3, Copy, Fingerprint, GitBranch, KeyRound, Layers3, RefreshCw, Route, ShieldCheck, Users } from "lucide-react";
 
 const capabilities = [
+  { icon: Layers3, title: "Transactional intake", copy: "Commit each message, endpoint fan-out, and dispatch record together before returning 202." },
   { icon: RefreshCw, title: "Automatic recovery", copy: "Increasing retry intervals, manual replay, and complete attempt history." },
-  { icon: Fingerprint, title: "Signed delivery", copy: "Independent HMAC secrets and timestamped signatures for every endpoint." },
+  { icon: Fingerprint, title: "Rotating signatures", copy: "Timestamped HMAC delivery with dual signatures during the 24-hour rotation window." },
   { icon: GitBranch, title: "Event subscriptions", copy: "Send only the event types each destination has chosen to receive." },
   { icon: Braces, title: "Schema mapping", copy: "Map nested fields visually and carry JSON, form, XML, or text bodies without format loss." },
   { icon: BellRing, title: "Traffic circuit breakers", copy: "Buffer anomalous spikes and notify operations before a destination is overwhelmed." },
-  { icon: Users, title: "Customer-native evidence", copy: "Embed a signed, short-lived delivery-history view inside your own product." }
+  { icon: Users, title: "Customer-native evidence", copy: "Embed a signed, permission-scoped delivery-history view inside your own product." },
+  { icon: KeyRound, title: "Scoped API access", copy: "Separate message publishing from relay reads with revocable project-level credentials." },
+  { icon: ShieldCheck, title: "Encrypted credentials", copy: "Protect provider secrets and destination authorization headers at rest." }
 ];
 
 export function ProblemSection() {
@@ -25,7 +28,7 @@ export function PlatformSection() {
   return <section className="unified-platform" id="platform">
     <div className="platform-heading" data-reveal><span className="section-label">One control plane</span><h2>Inbound and outbound events,<br />finally in one system.</h2><p>PayloadGrid sits between the systems producing events and the endpoints consuming them. Your application keeps one simple integration while PayloadGrid operates the delivery lifecycle.</p></div>
     <div className="platform-mode outbound-mode" data-reveal>
-      <div className="mode-copy"><span className="mode-index">01 / OUTBOUND</span><i><ArrowUpFromLine size={21} /></i><h3>Ship customer-facing webhooks without building a delivery platform.</h3><p>Call one authenticated API. PayloadGrid fans the message out to subscribed endpoints, signs each request, records the response, and recovers failures.</p><ul><li><Check size={15} /> API-key authentication</li><li><Check size={15} /> Idempotent message creation</li><li><Check size={15} /> Per-customer event subscriptions</li></ul></div>
+      <div className="mode-copy"><span className="mode-index">01 / OUTBOUND</span><i><ArrowUpFromLine size={21} /></i><h3>Ship customer-facing webhooks without building a delivery platform.</h3><p>Call one authenticated API or submit a bounded batch. PayloadGrid commits fan-out intent before responding, then signs each request, records the response, and recovers failures.</p><ul><li><Check size={15} /> Scoped API-key authentication</li><li><Check size={15} /> Idempotent single and batch intake</li><li><Check size={15} /> Per-customer event subscriptions</li></ul></div>
       <div className="mode-visual outbound-visual"><div className="visual-toolbar"><span>MESSAGE ROUTER</span><em><i /> LIVE</em></div><div className="message-source"><code>order.completed</code><span>1 message</span></div><div className="fanout-line"><i /><i /><i /></div><div className="fanout-targets"><article><span>AC</span><div><strong>Acme API</strong><small>200 · 184ms</small></div><em>delivered</em></article><article><span>NO</span><div><strong>Northstar</strong><small>503 · retry in 5m</small></div><em className="retry">retrying</em></article><article><span>PL</span><div><strong>Pixel Labs</strong><small>200 · 312ms</small></div><em>delivered</em></article></div></div>
     </div>
     <div className="platform-mode inbound-mode" data-reveal>

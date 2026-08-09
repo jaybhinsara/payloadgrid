@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { scheduleReplay } from "@/lib/delivery-operations";
-import { processDelivery } from "@/lib/delivery-worker";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 import { requireSql } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -33,11 +33,11 @@ export async function POST(_request: Request, contextValue: { params: Promise<{ 
       id: String(event.id), endpoint_id: String(event.endpoint_id),
       attempt_count: Number(event.attempt_count), rate_limit_per_minute: Number(event.rate_limit_per_minute)
     });
-    if (!result.scheduled) after(() => processDelivery(String(event.id)));
+    after(() => dispatchOutboxBatch(1, String(event.id)));
     await writeAudit(context.organization.id, context.user.id, "event.replay_accepted", "event", String(event.id), {
-      scheduled: result.scheduled, deliveryMode: result.scheduled ? "qstash" : "fallback", queueError: result.queueError
+      scheduled: result.scheduled, deliveryMode: "outbox", queueError: result.queueError
     });
-    return NextResponse.json({ ok: true, status: "accepted", scheduled: result.scheduled, deliveryMode: result.scheduled ? "qstash" : "fallback", queueError: result.queueError }, { status: 202 });
+    return NextResponse.json({ ok: true, status: "accepted", scheduled: result.scheduled, deliveryMode: "outbox", queueError: result.queueError }, { status: 202 });
   } catch (error) {
     const result = authErrorResponse(error);
     return NextResponse.json({ ok: false, error: result.message }, { status: error instanceof z.ZodError ? 400 : result.status });

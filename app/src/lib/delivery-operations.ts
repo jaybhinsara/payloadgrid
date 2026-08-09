@@ -1,6 +1,4 @@
 import { requireSql } from "@/lib/db";
-import { enqueueDelivery, queueErrorMessage } from "@/lib/queue";
-import { randomToken } from "@/lib/security";
 
 export type ReplayTarget = {
   id: string;
@@ -12,25 +10,21 @@ export type ReplayTarget = {
 export async function scheduleReplay(target: ReplayTarget) {
   const sql = requireSql();
   const attempt = Number(target.attempt_count || 0) + 1;
-  await sql`
-    update webhook_events set status = 'queued', locked_at = null, next_retry_at = null,
-      cancelled_at = null, dead_lettered_at = null, resolved_at = null, resolved_by = null, resolution_note = null,
-      max_retries = greatest(max_retries, ${attempt + 1}), updated_at = now()
-    where id = ${target.id}
+  const [result] = await sql`
+    with replayed as (
+      update webhook_events set status = 'queued', locked_at = null, next_retry_at = null,
+        cancelled_at = null, dead_lettered_at = null, resolved_at = null, resolved_by = null, resolution_note = null,
+        max_retries = greatest(max_retries, ${attempt + 1}), updated_at = now()
+      where id = ${target.id}
+      returning id
+    ), scheduled as (
+      insert into dispatch_jobs (event_id, status, available_at, last_error, locked_at, qstash_message_id, published_at, updated_at)
+      select id, 'pending', now(), null, null, null, null, now() from replayed
+      on conflict (event_id) do update set status = 'pending', available_at = now(), last_error = null,
+        locked_at = null, qstash_message_id = null, published_at = null, updated_at = now()
+      returning event_id
+    )
+    select event_id from scheduled
   `;
-
-  let scheduled = false;
-  let queueError: string | null = null;
-  try {
-    const queued = await enqueueDelivery({
-      eventId: String(target.id), endpointId: String(target.endpoint_id), attempt,
-      rateLimitPerMinute: Number(target.rate_limit_per_minute),
-      deduplicationId: `${target.id}-replay-${randomToken(8)}`
-    });
-    scheduled = queued.queued;
-    if (!queued.queued) queueError = queued.reason;
-  } catch (error) {
-    queueError = queueErrorMessage(error);
-  }
-  return { eventId: String(target.id), attempt, scheduled, queueError };
+  return { eventId: String(target.id), attempt, scheduled: Boolean(result), queueError: null };
 }

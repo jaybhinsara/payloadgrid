@@ -3,10 +3,10 @@ import { after } from "next/server";
 import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
+import { normalizeDeliveryHeaders } from "@/lib/destination-adapters";
 import { assertSafeDestinationUrl } from "@/lib/destination-security";
 import { requireSql } from "@/lib/db";
-import { processDelivery } from "@/lib/delivery-worker";
-import { enqueueDelivery } from "@/lib/queue";
+import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 import { encryptSecret, randomToken } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -18,6 +18,7 @@ const updateSchema = z.object({
   isActive: z.boolean().optional(),
   rotateSigningSecret: z.boolean().optional(),
   providerSecret: z.string().trim().min(1).max(500).optional(),
+  deliveryHeaders: z.record(z.string(), z.string()).optional(),
   circuitBreakerEnabled: z.boolean().optional(),
   circuitBreakerThreshold: z.number().int().min(20).max(100000).optional(),
   circuitState: z.enum(["closed", "open"]).optional()
@@ -41,16 +42,22 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
 
     const destinationUrl = body.destinationUrl ? await assertSafeDestinationUrl(body.destinationUrl) : null;
     const providerSecret = body.providerSecret ? encryptSecret(body.providerSecret) : null;
+    const deliveryHeaders = body.deliveryHeaders ? normalizeDeliveryHeaders(body.deliveryHeaders) : null;
+    const encryptedDeliveryHeaders = deliveryHeaders && Object.keys(deliveryHeaders).length ? encryptSecret(JSON.stringify(deliveryHeaders)) : null;
     const signingSecret = body.rotateSigningSecret ? `whsec_${randomToken(24)}` : null;
     await sql`
       update endpoints set
         name = case when ${body.name !== undefined} then ${body.name || null} else name end,
         destination_url = case when ${destinationUrl !== null} then ${destinationUrl} else destination_url end,
         is_active = case when ${body.isActive !== undefined} then ${body.isActive ?? false} else is_active end,
+        previous_signing_secret = case when ${signingSecret !== null} then signing_secret else previous_signing_secret end,
+        previous_signing_secret_expires_at = case when ${signingSecret !== null} then now() + interval '24 hours' else previous_signing_secret_expires_at end,
         signing_secret = case when ${signingSecret !== null} then ${signingSecret} else signing_secret end,
         provider_secret_encrypted = case when ${providerSecret !== null} then ${providerSecret} else provider_secret_encrypted end,
         provider_secret_hint = case when ${body.providerSecret !== undefined} then ${body.providerSecret ? `••••${body.providerSecret.slice(-4)}` : null} else provider_secret_hint end,
         provider_verification_required = case when ${body.providerSecret !== undefined} then ${String(existing.provider) !== "custom"} else provider_verification_required end,
+        delivery_headers_encrypted = case when ${body.deliveryHeaders !== undefined} then ${encryptedDeliveryHeaders} else delivery_headers_encrypted end,
+        delivery_header_names = case when ${body.deliveryHeaders !== undefined} then ${deliveryHeaders ? Object.keys(deliveryHeaders) : []} else delivery_header_names end,
         circuit_breaker_enabled = coalesce(${body.circuitBreakerEnabled ?? null}, circuit_breaker_enabled),
         circuit_breaker_threshold = coalesce(${body.circuitBreakerThreshold ?? null}, circuit_breaker_threshold),
         circuit_state = coalesce(${body.circuitState ?? null}, circuit_state),
@@ -67,31 +74,26 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
     }
     if (body.circuitState === "closed") {
       const buffered = await sql`
-        update webhook_events set status = 'queued', updated_at = now()
-        where endpoint_id = ${endpointId} and status = 'buffered'
-        returning id
+        with resumed as (
+          update webhook_events set status = 'queued', updated_at = now()
+          where endpoint_id = ${endpointId} and status = 'buffered'
+          returning id
+        ), scheduled as (
+          insert into dispatch_jobs (event_id, status, available_at, last_error, locked_at, qstash_message_id, published_at, updated_at)
+          select id, 'pending', now(), null, null, null, null, now() from resumed
+          on conflict (event_id) do update set status = 'pending', available_at = now(), last_error = null,
+            locked_at = null, qstash_message_id = null, published_at = null, updated_at = now()
+          returning event_id
+        )
+        select event_id as id from scheduled
       `;
       await sql`insert into circuit_breaker_events (endpoint_id, state, reason) values (${endpointId}, 'closed', 'Manually resumed from dashboard')`;
-      for (const item of buffered) {
-        after(async () => {
-          try {
-            const queued = await enqueueDelivery({
-              eventId: String(item.id),
-              endpointId,
-              attempt: 1,
-              rateLimitPerMinute: Number(existing.rate_limit_per_minute || 60)
-            });
-            if (!queued.queued) await processDelivery(String(item.id));
-          } catch {
-            await processDelivery(String(item.id));
-          }
-        });
-      }
+      if (buffered.length) after(() => dispatchOutboxBatch(Math.min(buffered.length, 100)));
     }
 
     const [endpoint] = await sql`
       select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, ep.signing_secret,
-        ep.provider_verification_required, ep.provider_secret_hint, ep.is_active, ep.circuit_breaker_enabled,
+        ep.provider_verification_required, ep.provider_secret_hint, ep.delivery_header_names, ep.is_active, ep.circuit_breaker_enabled,
         ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.created_at,
         coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
       from endpoints ep where ep.id = ${endpointId}

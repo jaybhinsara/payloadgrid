@@ -19,6 +19,26 @@ export function GET() {
           }
         }
       },
+      "/api/v1/messages/batch": {
+        post: {
+          summary: "Accept up to 100 outbound messages", operationId: "createMessageBatch",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateMessageBatch" } } } },
+          responses: { "202": { description: "Batch processed; inspect per-item results." }, "401": { description: "Invalid key or missing messages:write scope." }, "413": { description: "Batch exceeds 4 MB." }, "429": { description: "Rate or monthly plan limit exceeded." } }
+        }
+      },
+      "/api/v1/relay/events": {
+        get: {
+          summary: "Poll retained events for the local relay", operationId: "readRelayEvents",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { in: "query", name: "endpointId", required: true, schema: { type: "string", format: "uuid" } },
+            { in: "query", name: "cursor", required: false, schema: { type: "string" } },
+            { in: "query", name: "history", required: false, schema: { type: "boolean", default: false } }
+          ],
+          responses: { "200": { description: "Project-scoped relay events and the next cursor." }, "401": { description: "Invalid key or missing events:read scope." } }
+        }
+      },
       "/in/{endpointId}": {
         post: {
           summary: "Accept an inbound provider webhook", operationId: "receiveProviderWebhook",
@@ -32,7 +52,8 @@ export function GET() {
     components: {
       securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "PayloadGrid API key" } },
       schemas: {
-        CreateMessage: { type: "object", required: ["applicationId", "eventType", "payload"], properties: { applicationId: { type: "string", format: "uuid" }, eventType: { type: "string", minLength: 1, maxLength: 120, examples: ["order.completed"] }, payload: {} } },
+        CreateMessage: { type: "object", required: ["applicationId", "eventType", "payload"], properties: { applicationId: { type: "string", format: "uuid" }, eventType: { type: "string", minLength: 1, maxLength: 120, examples: ["order.completed"] }, idempotencyKey: { type: "string", maxLength: 200 }, payload: {} } },
+        CreateMessageBatch: { type: "object", required: ["events"], properties: { events: { type: "array", minItems: 1, maxItems: 100, items: { $ref: "#/components/schemas/CreateMessage" } } } },
         AcceptedMessage: { type: "object", required: ["ok", "messageId", "status", "queuedDeliveries"], properties: { ok: { type: "boolean", const: true }, messageId: { type: "string", format: "uuid" }, status: { type: "string", enum: ["accepted", "delivered"] }, duplicate: { type: "boolean" }, queuedDeliveries: { type: "integer" }, queueConfigured: { type: "boolean" } } }
       }
     }

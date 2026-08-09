@@ -15,9 +15,34 @@ export function UseCasesSection() {
   </section>;
 }
 
+export function ProductionSection() {
+  return <section className="production-section" id="reliability">
+    <div className="production-copy" data-reveal>
+      <span className="section-label light">Reliability core</span>
+      <h2>A 202 response backed by committed delivery intent.</h2>
+      <p>PayloadGrid does not perform endpoint fan-out inside your API request. Message state, matching deliveries, and dispatch jobs are written together, then independent workers move them through the delivery lifecycle.</p>
+      <div className="production-metrics">
+        <div><strong>100</strong><span>events per batch</span></div>
+        <div><strong>4 MB</strong><span>maximum batch body</span></div>
+        <div><strong>256 KB</strong><span>maximum event payload</span></div>
+        <div><strong>24 h</strong><span>dual-signature rotation</span></div>
+      </div>
+    </div>
+    <div className="dispatch-pipeline" data-reveal aria-label="Transactional webhook dispatch pipeline">
+      <header><span>DISPATCH PIPELINE</span><em><i /> RECOVERABLE</em></header>
+      <div className="pipeline-step"><span>01</span><Database size={19} /><div><strong>Commit once</strong><small>Message + fan-out + outbox</small></div><code>TRANSACTION</code></div>
+      <i className="pipeline-link" />
+      <div className="pipeline-step"><span>02</span><Network size={19} /><div><strong>Dispatch asynchronously</strong><small>Signed queue publication</small></div><code>QSTASH</code></div>
+      <i className="pipeline-link" />
+      <div className="pipeline-step"><span>03</span><ShieldCheck size={19} /><div><strong>Claim atomically</strong><small>One active attempt per delivery</small></div><code>WORKER</code></div>
+      <footer><Check size={15} /><span>Scheduled recovery republishes missing or stale dispatch jobs.</span></footer>
+    </div>
+  </section>;
+}
+
 export function SecuritySection() {
   return <section className="security-section" id="security">
-    <div className="security-copy" data-reveal><span className="section-label light">Security model</span><h2>Trust needs more than a green status badge.</h2><p>PayloadGrid’s ownership model follows the data. Users enter organizations, organizations own projects, and projects own every application, endpoint, key, message, and delivery record.</p><div className="security-points"><div><Fingerprint size={18} /><span><strong>Signed payloads</strong><small>Timestamped HMAC signatures per endpoint</small></span></div><div><KeyRound size={18} /><span><strong>One-way API keys</strong><small>Only secure hashes are stored in Postgres</small></span></div><div><Users size={18} /><span><strong>Role boundaries</strong><small>Owner, admin, developer, and viewer access</small></span></div><div><Database size={18} /><span><strong>Audit evidence</strong><small>Organization changes recorded with actor and time</small></span></div></div></div>
+    <div className="security-copy" data-reveal><span className="section-label light">Security model</span><h2>Trust needs more than a green status badge.</h2><p>PayloadGrid’s ownership model follows the data. Organizations own projects, and projects own every application, endpoint, scoped key, message, and delivery record.</p><div className="security-points"><div><Fingerprint size={18} /><span><strong>Rotating signatures</strong><small>Timestamped HMAC with a dual-signature migration window</small></span></div><div><KeyRound size={18} /><span><strong>Scoped API keys</strong><small>One-way hashes with separate publish and relay permissions</small></span></div><div><LockKeyhole size={18} /><span><strong>Encrypted credentials</strong><small>Provider secrets and destination headers encrypted at rest</small></span></div><div><Users size={18} /><span><strong>Role boundaries</strong><small>Owner, admin, developer, and viewer access</small></span></div><div><Database size={18} /><span><strong>Audit evidence</strong><small>Organization changes recorded with actor and time</small></span></div><div><ShieldCheck size={18} /><span><strong>Destination controls</strong><small>HTTPS enforcement, SSRF checks, and protected headers</small></span></div></div></div>
     <div className="security-terminal" data-reveal><div className="terminal-head"><span><LockKeyhole size={15} /> SIGNATURE VERIFICATION</span><em>HMAC-SHA256</em></div><div className="terminal-request"><span>payloadgrid-id</span><code>event_01JHF8Q9</code><span>payloadgrid-timestamp</span><code>1784299737</code><span>payloadgrid-signature</span><code>v1,pxj8wC...kP2</code></div><div className="terminal-check"><ShieldCheck size={18} /><span><strong>Signature verified</strong><small>Request timestamp is inside the accepted window</small></span><Check size={17} /></div><div className="tenant-map"><span>ORGANIZATION</span><i /><span>PROJECT</span><i /><span>APPLICATION</span><i /><span>ENDPOINT</span></div></div>
   </section>;
 }
@@ -71,7 +96,23 @@ response = requests.post(
     },
 )
 
-message = response.json()`
+message = response.json()`,
+  batch: `const response = await fetch(
+  "/api/v1/messages/batch",
+  {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer pg_live_...",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ events: [
+      { applicationId: "APPLICATION_UUID",
+        eventType: "order.completed",
+        idempotencyKey: "order_8921_completed",
+        payload: { orderId: "8921" } }
+    ] })
+  }
+);`
 } as const;
 
 const frameworkExamples = {
@@ -84,14 +125,14 @@ const frameworkExamples = {
 
 export function LocalDevelopmentSection() {
   const [framework, setFramework] = useState<keyof typeof frameworkExamples>("Next.js");
-  return <><section className="local-relay" data-reveal><div><span className="section-label">Local development</span><h2>Debug production-shaped events on localhost.</h2><p>The local relay CLI is in private preview. It is designed to authenticate a terminal session, subscribe to an endpoint, and forward captured events into a local server without a permanent public tunnel.</p><span className="preview-badge">CLI · PRIVATE PREVIEW</span></div><div className="relay-terminal"><header><i /><i /><i /><span>payloadgrid relay</span></header><pre><code><em>$</em> npm i -g payloadgrid-cli{"\n"}<em>$</em> pg login{"\n"}<strong>✓ authenticated · production</strong>{"\n"}<em>$</em> pg listen --port 3000{"\n"}<strong>✓ forwarding payment.captured → localhost:3000</strong>{"\n"}<span>200 POST /webhooks · 184ms</span></code></pre></div></section><section className="framework-recipes" data-reveal><div><span className="section-label">Framework recipes</span><h2>Use the HTTP client your backend already trusts.</h2><p>No package lock-in. Start with a native request and preserve authentication, idempotency, and tenant routing across modern stacks.</p></div><div className="api-studio"><div className="studio-tabs" role="tablist" aria-label="Framework recipe">{(Object.keys(frameworkExamples) as Array<keyof typeof frameworkExamples>).map((name) => <button key={name} role="tab" aria-selected={framework === name} className={framework === name ? "active" : ""} onClick={() => setFramework(name)}>{name}</button>)}</div><pre><code>{frameworkExamples[framework]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div></section><section className="debt-proof" data-reveal><span className="section-label">Engineering debt avoided</span><h2>Skip weeks of queue plumbing. Integrate the delivery API in minutes.</h2><p>Keep Redis dead-letter queues, exponential backoff workers, signature rotation scripts, and delivery evidence out of your product backlog.</p></section></>;
+  return <><section className="local-relay" data-reveal><div><span className="section-label">Local development</span><h2>Debug production-shaped events on localhost.</h2><p>The PayloadGrid relay CLI authenticates with a restricted `events:read` key, follows one endpoint, and forwards retained events into a local server without exposing a permanent public tunnel.</p><span className="preview-badge">PUBLIC NPM CLI · V0.1.0</span></div><div className="relay-terminal"><header><i /><i /><i /><span>payloadgrid relay</span></header><pre><code><em>$</em> npm install -g payloadgrid-cli{"\n"}<strong>✓ installed payloadgrid-cli@0.1.0</strong>{"\n"}<em>$</em> pg login --api-key pg_live_RELAY_KEY{"\n"}<strong>✓ credentials saved · events:read</strong>{"\n"}<em>$</em> pg listen --endpoint ep_... \{"\n"}    --forward http://localhost:3000/webhooks{"\n"}<span>200 POST /webhooks · 184ms</span></code></pre></div></section><section className="framework-recipes" data-reveal><div><span className="section-label">Framework recipes</span><h2>Use the HTTP client your backend already trusts.</h2><p>No package lock-in. Start with a native request and preserve authentication, idempotency, and tenant routing across modern stacks.</p></div><div className="api-studio"><div className="studio-tabs" role="tablist" aria-label="Framework recipe">{(Object.keys(frameworkExamples) as Array<keyof typeof frameworkExamples>).map((name) => <button key={name} role="tab" aria-selected={framework === name} className={framework === name ? "active" : ""} onClick={() => setFramework(name)}>{name}</button>)}</div><pre><code>{frameworkExamples[framework]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div></section><section className="debt-proof" data-reveal><span className="section-label">Engineering debt avoided</span><h2>Skip weeks of queue plumbing. Integrate the delivery API in minutes.</h2><p>Keep transactional fan-out, dead-letter queues, exponential backoff workers, signature rotation, and delivery evidence out of your product backlog.</p></section></>;
 }
 
 export function DeveloperSection() {
   const [language, setLanguage] = useState<keyof typeof apiExamples>("curl");
   return <section className="developer-section" id="developers">
     <div className="developer-intro" data-reveal><span className="section-label">Developer adoption</span><h2>One API call between your product and every destination.</h2><p>PayloadGrid uses ordinary HTTPS and JSON, so any backend language can send events. Start in the console, generate a key, then move the exact same workflow into production code.</p><div className="integration-steps"><div><span>1</span><strong>Create an application</strong><small>Represent the customer or product context.</small></div><div><span>2</span><strong>Add destinations</strong><small>Choose subscriptions and copy signing secrets.</small></div><div><span>3</span><strong>Send a message</strong><small>PayloadGrid fans out and operates delivery.</small></div></div></div>
-    <div className="api-studio" data-reveal><div className="studio-tabs" role="tablist" aria-label="API example language"><button role="tab" aria-selected={language === "curl"} className={language === "curl" ? "active" : ""} onClick={() => setLanguage("curl")}><TerminalSquare size={15} /> cURL</button><button role="tab" aria-selected={language === "node"} className={language === "node" ? "active" : ""} onClick={() => setLanguage("node")}>Node.js</button><button role="tab" aria-selected={language === "python"} className={language === "python" ? "active" : ""} onClick={() => setLanguage("python")}>Python</button><em>POST /api/v1/messages</em></div><pre><code>{apiExamples[language]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div>
+    <div className="api-studio" data-reveal><div className="studio-tabs" role="tablist" aria-label="API example language"><button role="tab" aria-selected={language === "curl"} className={language === "curl" ? "active" : ""} onClick={() => setLanguage("curl")}><TerminalSquare size={15} /> cURL</button><button role="tab" aria-selected={language === "node"} className={language === "node" ? "active" : ""} onClick={() => setLanguage("node")}>Node.js</button><button role="tab" aria-selected={language === "python"} className={language === "python" ? "active" : ""} onClick={() => setLanguage("python")}>Python</button><button role="tab" aria-selected={language === "batch"} className={language === "batch" ? "active" : ""} onClick={() => setLanguage("batch")}>Batch</button><em>{language === "batch" ? "POST /api/v1/messages/batch" : "POST /api/v1/messages"}</em></div><pre><code>{apiExamples[language]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{language === "batch" ? '{ "accepted": 2, "rejected": 0 }' : '{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div>
   </section>;
 }
 
