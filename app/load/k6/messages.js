@@ -5,7 +5,14 @@ import { Counter, Rate, Trend } from "k6/metrics";
 const accepted = new Rate("payloadgrid_accepted");
 const duplicates = new Counter("payloadgrid_duplicates");
 const acceptanceLatency = new Trend("payloadgrid_acceptance_latency", true);
-const rate = Number(__ENV.RATE || 10);
+const rate = Number(__ENV.RATE || 2);
+
+export function setup() {
+  for (const name of ["BASE_URL", "API_KEY", "APPLICATION_ID"]) {
+    if (!__ENV[name]) throw new Error(`${name} is required`);
+  }
+  if (!__ENV.BASE_URL.startsWith("https://")) throw new Error("BASE_URL must use HTTPS");
+}
 
 export const options = {
   scenarios: {

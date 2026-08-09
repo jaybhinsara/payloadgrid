@@ -2,12 +2,17 @@
 
 These tests are deliberately not run against production automatically. Create an isolated project, application, API key, and endpoint before testing.
 
-```bash
-k6 run -e BASE_URL=https://payloadgrid.com -e API_KEY=pg_live_... -e APPLICATION_ID=... -e RATE=10 load/k6/messages.js
-k6 run -e BASE_URL=https://payloadgrid.com -e API_KEY=pg_live_... -e APPLICATION_ID=... -e RATE=2 -e BATCH_SIZE=25 load/k6/batch.js
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\load\run.ps1 -Profile baseline -BaseUrl https://payloadgrid.com -ApiKey pg_live_... -ApplicationId APPLICATION_UUID -IsolatedProject -Approval I_APPROVE_LOAD_TEST
+.\load\run.ps1 -Profile limit -BaseUrl https://payloadgrid.com -ApiKey pg_live_... -ApplicationId APPLICATION_UUID -IsolatedProject -Approval I_APPROVE_LOAD_TEST
+.\load\run.ps1 -Profile batch -BaseUrl https://payloadgrid.com -ApiKey pg_live_... -ApplicationId APPLICATION_UUID -IsolatedProject -Approval I_APPROVE_LOAD_TEST
+.\load\run.ps1 -Profile inbound -BaseUrl https://payloadgrid.com -EndpointId ENDPOINT_UUID -IsolatedProject -Approval I_APPROVE_LOAD_TEST
 ```
 
-Repeat the message test at `RATE=10`, `RATE=100`, and `RATE=500` only after raising the test project's rate limit. The current Free plan correctly rejects traffic above five API requests per second.
+The guarded runner records a k6 JSON summary, console output, and non-secret metadata under `load/results/`. The included profiles stay within the current 300-request/minute limit: baseline outbound and inbound run at 2 requests/second, limit runs at 5 requests/second, and batch sends 25 events twice per second. The batch profile consumes approximately 3,000 monthly events in one minute.
+
+Run higher rates only in a dedicated production-like deployment after increasing that environment's plan limits and confirming Vercel, Neon, and QStash capacity. Never increase `MaxEvents` without reviewing the expected queue and database cost.
 
 Use `node load/failure-receiver.mjs` behind a temporary HTTPS tunnel to test retries. Set `RESPONSE_STATUS=503`, `429`, or `200`, and use `RESPONSE_DELAY_MS=16000` to test delivery timeouts.
 

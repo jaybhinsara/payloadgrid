@@ -2,6 +2,12 @@ import http from "k6/http";
 import { check } from "k6";
 
 const batchSize = Number(__ENV.BATCH_SIZE || 25);
+export function setup() {
+  for (const name of ["BASE_URL", "API_KEY", "APPLICATION_ID"]) {
+    if (!__ENV[name]) throw new Error(`${name} is required`);
+  }
+  if (!__ENV.BASE_URL.startsWith("https://")) throw new Error("BASE_URL must use HTTPS");
+}
 export const options = {
   scenarios: { batches: { executor: "constant-arrival-rate", rate: Number(__ENV.RATE || 2), timeUnit: "1s", duration: __ENV.DURATION || "2m", preAllocatedVUs: 10, maxVUs: 50 } },
   thresholds: { http_req_failed: ["rate<0.01"], http_req_duration: ["p(95)<3000"] }
