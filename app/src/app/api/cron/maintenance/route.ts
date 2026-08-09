@@ -18,10 +18,23 @@ export async function GET(request: Request) {
     await sql`delete from api_usage_windows where window_start < now() - interval '2 days'`;
     await sql`delete from endpoint_usage_windows where window_start < now() - interval '2 days'`;
     await sql`delete from dispatch_jobs where status = 'published' and published_at < now() - interval '7 days'`;
+    const [serviceCheckPruning] = await sql`
+      with total as (
+        select count(*)::int as row_count from service_checks
+      ), stale as (
+        select id from service_checks order by checked_at desc, id desc offset 100
+      ), deleted as (
+        delete from service_checks
+        using stale, total
+        where service_checks.id = stale.id and total.row_count >= 1000
+        returning service_checks.id
+      )
+      select count(*)::int as deleted_count from deleted
+    `;
     await sql`update endpoints set previous_signing_secret = null, previous_signing_secret_expires_at = null where previous_signing_secret_expires_at <= now()`;
     await sql`delete from sessions where expires_at <= now()`;
     await sql`delete from oauth_states where expires_at <= now()`;
-    return NextResponse.json({ ok: true, redactedEvents: expired.length });
+    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0) });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Maintenance failed" }, { status: 500 });
   }

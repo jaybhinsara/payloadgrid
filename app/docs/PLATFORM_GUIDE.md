@@ -500,6 +500,8 @@ An incident opens after three consecutive unhealthy checks for one service and a
 
 With hourly monitoring, detection can take up to three hours and automatic recovery confirmation can take up to two hours. Use a shorter schedule only after accounting for QStash quotas.
 
+Raw service checks are bounded operational data. The daily maintenance job allows the table to grow to 1,000 rows, then removes older checks and retains the newest 100. Incident records and incident updates are not removed by this pruning policy.
+
 ## 13. Environment variables
 
 ### Required application variables

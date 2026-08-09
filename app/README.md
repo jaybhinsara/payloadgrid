@@ -111,7 +111,7 @@ Authorization: Bearer YOUR_CRON_SECRET
 Schedule: hourly for free-plan testing
 ```
 
-The dispatch route publishes pending outbox rows and recovers missing or stale dispatch jobs. Retry recovery resets stale workers and performs the same outbox recovery. Maintenance redacts expired payloads, erases expired rotation secrets, and removes expired operational records. Monitoring records customer-facing service checks, opens an incident after three consecutive failures, and resolves it after two consecutive healthy checks.
+The dispatch route publishes pending outbox rows and recovers missing or stale dispatch jobs. Retry recovery resets stale workers and performs the same outbox recovery. Maintenance redacts expired payloads, erases expired rotation secrets, removes expired operational records, and prunes raw service checks from 1,000 rows back to the newest 100. Monitoring records customer-facing service checks, opens an incident after three consecutive failures, and resolves it after two consecutive healthy checks.
 
 ## Transactional email
 
