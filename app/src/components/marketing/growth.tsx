@@ -60,43 +60,27 @@ const apiExamples = {
       "status": "completed"
     }
   }'`,
-  node: `const response = await fetch(
-  "/api/v1/messages",
-  {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer pg_live_...",
-      "Idempotency-Key": "order_8921_completed",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      applicationId: "APPLICATION_UUID",
-      eventType: "order.completed",
-      payload: { orderId: "8921", status: "completed" }
-    })
-  }
-);
+  node: `npm install @payloadgrid/sdk
 
-const message = await response.json();`,
-  python: `import requests
+import { PayloadGrid } from "@payloadgrid/sdk";
 
-response = requests.post(
-    "/api/v1/messages",
-    headers={
-        "Authorization": "Bearer pg_live_...",
-        "Idempotency-Key": "order_8921_completed",
-    },
-    json={
-        "applicationId": "APPLICATION_UUID",
-        "eventType": "order.completed",
-        "payload": {
-            "orderId": "8921",
-            "status": "completed",
-        },
-    },
-)
+const client = new PayloadGrid({ apiKey: process.env.PAYLOADGRID_API_KEY });
+const message = await client.send({
+  applicationId: "APPLICATION_UUID",
+  eventType: "order.completed",
+  payload: { orderId: "8921", status: "completed" }
+}, { idempotencyKey: "order_8921_completed" });`,
+  python: `pip install payloadgrid
 
-message = response.json()`,
+from payloadgrid import PayloadGrid
+
+client = PayloadGrid("pg_live_YOUR_KEY")
+message = client.send(
+    "APPLICATION_UUID",
+    "order.completed",
+    {"orderId": "8921", "status": "completed"},
+    "order_8921_completed",
+)`,
   batch: `const response = await fetch(
   "/api/v1/messages/batch",
   {
@@ -125,7 +109,7 @@ const frameworkExamples = {
 
 export function LocalDevelopmentSection() {
   const [framework, setFramework] = useState<keyof typeof frameworkExamples>("Next.js");
-  return <><section className="local-relay" data-reveal><div><span className="section-label">Local development</span><h2>Debug production-shaped events on localhost.</h2><p>The PayloadGrid relay CLI authenticates with a restricted `events:read` key, follows one endpoint, and forwards retained events into a local server without exposing a permanent public tunnel.</p><span className="preview-badge">PUBLIC NPM CLI · V0.1.0</span></div><div className="relay-terminal"><header><i /><i /><i /><span>payloadgrid relay</span></header><pre><code><em>$</em> npm install -g payloadgrid-cli{"\n"}<strong>✓ installed payloadgrid-cli@0.1.0</strong>{"\n"}<em>$</em> pg login --api-key pg_live_RELAY_KEY{"\n"}<strong>✓ credentials saved · events:read</strong>{"\n"}<em>$</em> pg listen --endpoint ep_... \{"\n"}    --forward http://localhost:3000/webhooks{"\n"}<span>200 POST /webhooks · 184ms</span></code></pre></div></section><section className="framework-recipes" data-reveal><div><span className="section-label">Framework recipes</span><h2>Use the HTTP client your backend already trusts.</h2><p>No package lock-in. Start with a native request and preserve authentication, idempotency, and tenant routing across modern stacks.</p></div><div className="api-studio"><div className="studio-tabs" role="tablist" aria-label="Framework recipe">{(Object.keys(frameworkExamples) as Array<keyof typeof frameworkExamples>).map((name) => <button key={name} role="tab" aria-selected={framework === name} className={framework === name ? "active" : ""} onClick={() => setFramework(name)}>{name}</button>)}</div><pre><code>{frameworkExamples[framework]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div></section><section className="debt-proof" data-reveal><span className="section-label">Engineering debt avoided</span><h2>Skip weeks of queue plumbing. Integrate the delivery API in minutes.</h2><p>Keep transactional fan-out, dead-letter queues, exponential backoff workers, signature rotation, and delivery evidence out of your product backlog.</p></section></>;
+  return <><section className="local-relay" data-reveal><div><span className="section-label">Local development</span><h2>Debug production-shaped events on localhost.</h2><p>The PayloadGrid relay CLI authenticates with a restricted `events:read` key, follows one endpoint, and forwards retained events into a local server without exposing a permanent public tunnel.</p><span className="preview-badge">PUBLIC NPM CLI · V0.1.0</span></div><div className="relay-terminal"><header><i /><i /><i /><span>payloadgrid relay</span></header><pre><code><em>$</em> npm install -g payloadgrid-cli{"\n"}<strong>✓ installed payloadgrid-cli@0.1.0</strong>{"\n"}<em>$</em> pg login --api-key pg_live_RELAY_KEY{"\n"}<strong>✓ credentials saved · events:read</strong>{"\n"}<em>$</em> pg listen --endpoint ep_... \{"\n"}    --forward http://localhost:3000/webhooks{"\n"}<span>200 POST /webhooks · 184ms</span></code></pre></div></section><section className="framework-recipes" data-reveal><div><span className="section-label">SDKs and framework recipes</span><h2>Use a published SDK or the HTTP client your backend already trusts.</h2><p>Official Node.js, Python, and React packages cover event publishing and embedded delivery history. Native HTTPS remains available for every other stack.</p><div className="published-packages" aria-label="Published PayloadGrid packages"><code>npm i @payloadgrid/sdk</code><code>pip install payloadgrid</code><code>npm i @payloadgrid/react</code></div></div><div className="api-studio"><div className="studio-tabs" role="tablist" aria-label="Framework recipe">{(Object.keys(frameworkExamples) as Array<keyof typeof frameworkExamples>).map((name) => <button key={name} role="tab" aria-selected={framework === name} className={framework === name ? "active" : ""} onClick={() => setFramework(name)}>{name}</button>)}</div><pre><code>{frameworkExamples[framework]}</code></pre><div className="studio-response"><span>202 ACCEPTED</span><code>{'{ "status": "accepted", "queuedDeliveries": 3 }'}</code></div></div></section><section className="debt-proof" data-reveal><span className="section-label">Engineering debt avoided</span><h2>Skip weeks of queue plumbing. Integrate the delivery API in minutes.</h2><p>Keep transactional fan-out, dead-letter queues, exponential backoff workers, signature rotation, and delivery evidence out of your product backlog.</p></section></>;
 }
 
 export function DeveloperSection() {
