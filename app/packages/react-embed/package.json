@@ -2,10 +2,16 @@
   "name": "@payloadgrid/react",
   "version": "0.1.0",
   "description": "PayloadGrid embedded delivery portal component",
+  "keywords": ["payloadgrid", "webhooks", "react", "embed"],
   "type": "module",
   "main": "index.js",
   "types": "index.d.ts",
+  "exports": { ".": { "types": "./index.d.ts", "import": "./index.js" } },
   "peerDependencies": { "react": ">=18" },
-  "files": ["index.js", "index.d.ts", "README.md"],
-  "license": "MIT"
+  "files": ["index.js", "index.d.ts", "README.md", "LICENSE"],
+  "license": "MIT",
+  "homepage": "https://payloadgrid.com/docs",
+  "repository": { "type": "git", "url": "git+https://github.com/jaybhinsara/hookin.git", "directory": "app/packages/react-embed" },
+  "bugs": { "url": "https://github.com/jaybhinsara/hookin/issues" },
+  "publishConfig": { "access": "public" }
 }

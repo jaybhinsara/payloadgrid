@@ -2,11 +2,16 @@
   "name": "@payloadgrid/sdk",
   "version": "0.1.0",
   "description": "Official server-side SDK for PayloadGrid",
+  "keywords": ["payloadgrid", "webhooks", "sdk", "events"],
   "type": "module",
   "main": "index.js",
   "types": "index.d.ts",
   "exports": { ".": { "types": "./index.d.ts", "import": "./index.js" } },
   "engines": { "node": ">=20" },
-  "files": ["index.js", "index.d.ts", "README.md"],
-  "license": "MIT"
+  "files": ["index.js", "index.d.ts", "README.md", "LICENSE"],
+  "license": "MIT",
+  "homepage": "https://payloadgrid.com/docs",
+  "repository": { "type": "git", "url": "git+https://github.com/jaybhinsara/hookin.git", "directory": "app/packages/sdk-typescript" },
+  "bugs": { "url": "https://github.com/jaybhinsara/hookin/issues" },
+  "publishConfig": { "access": "public" }
 }

@@ -6,8 +6,22 @@ build-backend = "setuptools.build_meta"
 name = "payloadgrid"
 version = "0.1.0"
 description = "Official server-side SDK for PayloadGrid"
+readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["payloadgrid", "webhooks", "sdk", "events"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.urls]
+Homepage = "https://payloadgrid.com"
+Documentation = "https://payloadgrid.com/docs"
+Repository = "https://github.com/jaybhinsara/hookin"
+Issues = "https://github.com/jaybhinsara/hookin/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
