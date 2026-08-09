@@ -6,10 +6,10 @@
   "homepage": "https://payloadgrid.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jaybhinsara/hookin.git",
+    "url": "git+https://github.com/jaybhinsara/payloadgrid.git",
     "directory": "app/packages/cli"
   },
-  "bugs": { "url": "https://github.com/jaybhinsara/hookin/issues" },
+  "bugs": { "url": "https://github.com/jaybhinsara/payloadgrid/issues" },
   "type": "module",
   "bin": { "payloadgrid": "bin/payloadgrid.mjs", "pg": "bin/payloadgrid.mjs" },
   "engines": { "node": ">=20" },

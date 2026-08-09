@@ -20,8 +20,8 @@ classifiers = [
 [project.urls]
 Homepage = "https://payloadgrid.com"
 Documentation = "https://payloadgrid.com/docs"
-Repository = "https://github.com/jaybhinsara/hookin"
-Issues = "https://github.com/jaybhinsara/hookin/issues"
+Repository = "https://github.com/jaybhinsara/payloadgrid"
+Issues = "https://github.com/jaybhinsara/payloadgrid/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

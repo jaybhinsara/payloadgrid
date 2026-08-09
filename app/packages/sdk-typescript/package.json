@@ -11,7 +11,7 @@
   "files": ["index.js", "index.d.ts", "README.md", "LICENSE"],
   "license": "MIT",
   "homepage": "https://payloadgrid.com/docs",
-  "repository": { "type": "git", "url": "git+https://github.com/jaybhinsara/hookin.git", "directory": "app/packages/sdk-typescript" },
-  "bugs": { "url": "https://github.com/jaybhinsara/hookin/issues" },
+  "repository": { "type": "git", "url": "git+https://github.com/jaybhinsara/payloadgrid.git", "directory": "app/packages/sdk-typescript" },
+  "bugs": { "url": "https://github.com/jaybhinsara/payloadgrid/issues" },
   "publishConfig": { "access": "public" }
 }
