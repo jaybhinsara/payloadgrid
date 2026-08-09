@@ -1,0 +1,30 @@
+{
+  "test": {
+    "date": "2026-08-09",
+    "target": "https://payloadgrid.com",
+    "profile": "baseline",
+    "duration": "2m",
+    "ratePerSecond": 2,
+    "isolatedProject": true
+  },
+  "apiAcceptance": {
+    "requests": 241,
+    "accepted": 241,
+    "failed": 0,
+    "acceptanceRate": 1,
+    "latencyMs": {
+      "average": 266.79211327800834,
+      "median": 254.0883,
+      "p90": 324.2317,
+      "p95": 359.805,
+      "maximum": 536.7151
+    }
+  },
+  "destination": {
+    "receiver": "webhook.site free allowance",
+    "http200Attempts": 50,
+    "http429Attempts": 570,
+    "limitation": "The receiver rejected requests after its free allowance was exhausted. Destination attempts include automatic retries."
+  },
+  "claimBoundary": "This result validates baseline API acceptance and retry behavior. It is not a maximum-throughput result, proof that all source events completed delivery, or an SLA."
+}

@@ -22,11 +22,14 @@ export function ProductionSection() {
       <h2>A 202 response backed by committed delivery intent.</h2>
       <p>PayloadGrid does not perform endpoint fan-out inside your API request. Message state, matching deliveries, and dispatch jobs are written together, then independent workers move them through the delivery lifecycle.</p>
       <div className="production-metrics">
+        <div><strong>241 / 241</strong><span>baseline API requests accepted</span></div>
+        <div><strong>360 ms</strong><span>baseline acceptance p95</span></div>
         <div><strong>100</strong><span>events per batch</span></div>
         <div><strong>4 MB</strong><span>maximum batch body</span></div>
         <div><strong>256 KB</strong><span>maximum event payload</span></div>
         <div><strong>24 h</strong><span>dual-signature rotation</span></div>
       </div>
+      <small className="production-evidence-note">Production baseline measured August 9, 2026 at 2 requests per second for 2 minutes. This measurement is not an SLA.</small>
     </div>
     <div className="dispatch-pipeline" data-reveal aria-label="Transactional webhook dispatch pipeline">
       <header><span>DISPATCH PIPELINE</span><em><i /> RECOVERABLE</em></header>
