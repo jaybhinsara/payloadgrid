@@ -22,8 +22,8 @@ export function ProductionSection() {
       <h2>A 202 response backed by committed delivery intent.</h2>
       <p>PayloadGrid does not perform endpoint fan-out inside your API request. Message state, matching deliveries, and dispatch jobs are written together, then independent workers move them through the delivery lifecycle.</p>
       <div className="production-metrics">
-        <div><strong>241 / 241</strong><span>baseline API requests accepted</span></div>
-        <div><strong>360 ms</strong><span>baseline acceptance p95</span></div>
+        <div><strong>100% Fetch</strong><span>baseline API requests accepted</span></div>
+        <div><strong>300 ms</strong><span>baseline acceptance p95</span></div>
         <div><strong>100</strong><span>events per batch</span></div>
         <div><strong>4 MB</strong><span>maximum batch body</span></div>
         <div><strong>256 KB</strong><span>maximum event payload</span></div>
