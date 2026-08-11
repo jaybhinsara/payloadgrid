@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
 import { Fingerprint, KeyRound, LockKeyhole, Network, ShieldCheck, Users } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "Security and Data Handling", description: "PayloadGrid security controls, data retention, provider verification, and current assurance boundaries." };
+export const metadata = publicMetadata({ title: "Webhook Security and Data Handling", description: "Review PayloadGrid webhook signatures, provider verification, encrypted secrets, tenant isolation, payload retention, and current assurance boundaries.", path: "/security" });
 const controls = [{ icon: Fingerprint, title: "Signed deliveries", copy: "Endpoint-specific HMAC-SHA256 signatures include a delivery ID and timestamp." }, { icon: ShieldCheck, title: "Provider verification", copy: "Raw-body validation for Razorpay, Cashfree, Stripe, and Shopify callbacks." }, { icon: KeyRound, title: "Hashed API keys", copy: "API key secrets are shown once. Only SHA-256 hashes are retained for authentication." }, { icon: LockKeyhole, title: "Encrypted provider secrets", copy: "Provider verification secrets use AES-256-GCM application encryption before database storage." }, { icon: Users, title: "Tenant boundaries", copy: "Organizations own projects; every application, endpoint, key, message, and delivery query is project-scoped." }, { icon: Network, title: "Destination controls", copy: "Production destinations require HTTPS. Private, loopback, local, and metadata addresses are rejected." }];
 
 export default function SecurityPage() {

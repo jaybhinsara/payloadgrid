@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
 import { Mail, MessageSquareText, ShieldAlert } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
 import { SUPPORT_EMAIL } from "@/lib/site";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "Contact", description: "Contact PayloadGrid for product questions, technical support, capacity planning, or security reports." };
+export const metadata = publicMetadata({ title: "Contact PayloadGrid", description: "Contact PayloadGrid about webhook infrastructure, technical support, event-volume capacity planning, or private security reports.", path: "/contact" });
 
 export default function ContactPage() {
   const subject = encodeURIComponent("PayloadGrid product question");

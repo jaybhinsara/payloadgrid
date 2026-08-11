@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
 import { PublicPage } from "@/components/marketing/public-page";
 import { SUPPORT_EMAIL } from "@/lib/site";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "Terms of Service", description: "Terms governing use of the PayloadGrid webhook service." };
+export const metadata = publicMetadata({ title: "Terms of Service", description: "Terms governing access to and use of the PayloadGrid webhook delivery and management service.", path: "/terms" });
 
 export default function TermsPage() {
   return <PublicPage eyebrow="Legal" title="Terms of Service" intro="Effective August 1, 2026. These terms govern access to and use of PayloadGrid.">

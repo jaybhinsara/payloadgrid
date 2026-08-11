@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { PublicPage } from "@/components/marketing/public-page";
 import { WebhookPlayground } from "@/components/marketing/webhook-playground";
-export const metadata: Metadata = { title: "Webhook Playground", description: "Explore webhook acceptance, retries, delivery, and signatures without creating an account." };
+import { publicMetadata } from "@/lib/seo";
+export const metadata = publicMetadata({ title: "Webhook Retry and Signature Playground", description: "Simulate webhook acceptance, destination failure, automatic retry, recovery, and HMAC signatures in your browser without an account.", path: "/playground" });
 export default function PlaygroundPage() { return <PublicPage eyebrow="No-signup playground" title="See the delivery lifecycle before integrating." intro="Run a local simulation of acceptance, failure, retry, recovery, and HMAC signing. Nothing leaves your browser."><WebhookPlayground /><section className="public-section"><span className="section-label">What this demonstrates</span><h2>Accepted, retrying, and delivered are different states.</h2><p>The simulator intentionally fails the first destination attempt. That makes the operational value visible: PayloadGrid records the failure, schedules recovery, signs the next request, and preserves one delivery identity through the lifecycle.</p></section></PublicPage>; }

@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
 import { PublicPage } from "@/components/marketing/public-page";
 import { SUPPORT_EMAIL } from "@/lib/site";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "Privacy Policy", description: "How PayloadGrid collects, uses, retains, and protects account and webhook data." };
+export const metadata = publicMetadata({ title: "Privacy Policy", description: "How PayloadGrid collects, uses, retains, and protects account, configuration, and webhook delivery data.", path: "/privacy" });
 
 export default function PrivacyPage() {
   return <PublicPage eyebrow="Legal" title="Privacy Policy" intro="Effective August 1, 2026. This policy describes how PayloadGrid processes account, configuration, and webhook data.">

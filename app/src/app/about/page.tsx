@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { PublicPage } from "@/components/marketing/public-page";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "About", description: "Why PayloadGrid is building webhook infrastructure for teams operating global software products." };
+export const metadata = publicMetadata({ title: "About PayloadGrid", description: "Why PayloadGrid is building unified inbound and outbound webhook infrastructure for teams operating global software products.", path: "/about" });
 
 export default function AboutPage() {
   return <PublicPage eyebrow="About PayloadGrid" title="Webhook operations for globally distributed products." intro="PayloadGrid gives SaaS, commerce, fintech, and platform teams one control plane for inbound callbacks and customer-facing event delivery.">

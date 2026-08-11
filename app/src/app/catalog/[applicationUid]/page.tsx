@@ -6,7 +6,7 @@ import { requireSql } from "@/lib/db";
 import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Event catalog", description: "Generated webhook event contracts and integration examples." };
+export const metadata: Metadata = { title: "Event catalog", description: "Generated webhook event contracts and integration examples.", robots: { index: false, follow: false } };
 
 export default async function EventCatalog({ params }: { params: Promise<{ applicationUid: string }> }) {
   const { applicationUid } = await params;

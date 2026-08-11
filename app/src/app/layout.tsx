@@ -11,7 +11,6 @@ export const metadata: Metadata = {
   title: { default: title, template: "%s | PayloadGrid" },
   description,
   applicationName: "PayloadGrid",
-  alternates: { canonical: "/" },
   keywords: ["webhook infrastructure", "webhook delivery", "webhook retries", "webhook gateway", "webhook monitoring", "webhook replay", "outbound webhooks", "inbound webhooks", "webhook API", "webhook service", "payment webhooks", "commerce webhooks"],
   authors: [{ name: "PayloadGrid", url: "/" }],
   creator: "PayloadGrid",
@@ -49,7 +48,10 @@ export const metadata: Metadata = {
       "max-snippet": -1,
       "max-video-preview": -1
     }
-  }
+  },
+  verification: process.env.GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+    : undefined
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#fbfcfa" };

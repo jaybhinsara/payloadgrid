@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
 import { PLAN_LIMITS } from "@/lib/limits";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "Pricing", description: "Start free with PayloadGrid webhook infrastructure and contact us for higher-volume capacity." };
+export const metadata = publicMetadata({ title: "Webhook Infrastructure Pricing", description: "Start free with PayloadGrid webhook infrastructure, automatic retries, replay, signatures, and delivery logs. Review limits and higher-volume options.", path: "/pricing" });
 
 export default function PricingPage() {
   return <PublicPage eyebrow="Simple pricing" title="Start free. Scale with your traffic." intro="Use the Free plan for development and production workloads within the included limits. No credit card is required.">

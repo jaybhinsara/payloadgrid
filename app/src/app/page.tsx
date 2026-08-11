@@ -7,6 +7,13 @@ import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { SITE_URL } from "@/lib/site";
 import { hasSessionCookie } from "@/lib/auth";
+import { publicMetadata } from "@/lib/seo";
+
+export const metadata = publicMetadata({
+  title: "Webhook Infrastructure for Reliable Delivery",
+  description: "Send, receive, verify, retry, replay, and monitor webhooks with PayloadGrid's unified delivery infrastructure for SaaS and developer teams.",
+  path: "/"
+});
 
 const structuredData = {
   "@context": "https://schema.org",

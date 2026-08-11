@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
 import { CheckCircle2, Gauge, LayoutDashboard, RotateCcw, Send, Server, TriangleAlert, Webhook, XCircle } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
 import { readPublicHealth, type PublicHealth, type ServiceState } from "@/lib/health";
 import { readMonitoringSummary } from "@/lib/monitoring";
+import { publicMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = { title: "Service Status", description: "Live availability and incident history for PayloadGrid APIs, dashboard, webhook ingestion, delivery, and retries." };
+export const metadata = publicMetadata({ title: "PayloadGrid Service Status", description: "Live availability and incident history for PayloadGrid APIs, dashboard, inbound webhook ingestion, outbound delivery, and scheduled retries.", path: "/status" });
 export const dynamic = "force-dynamic";
 
 function unavailableHealth(): PublicHealth {
