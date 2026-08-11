@@ -9,6 +9,7 @@ import { Brand } from "@/components/brand";
 const links = [
   { href: "/#platform", label: "Platform" },
   { href: "/docs", label: "Docs" },
+  { href: "/blog", label: "Blog" },
   { href: "/pricing", label: "Pricing" },
   { href: "/security", label: "Security" },
   { href: "/status", label: "Status" }

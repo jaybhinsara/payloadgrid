@@ -3,7 +3,7 @@ import { Brand } from "@/components/brand";
 
 const groups = [
   { title: "Product", links: [["Platform", "/#platform"], ["Pricing", "/pricing"], ["Playground", "/playground"], ["Status", "/status"]] },
-  { title: "Developers", links: [["Documentation", "/docs"], ["API reference", "/api/openapi"], ["Security", "/security"]] },
+  { title: "Developers", links: [["Documentation", "/docs"], ["Blog", "/blog"], ["API reference", "/api/openapi"], ["Security", "/security"]] },
   { title: "Company", links: [["About", "/about"], ["Contact", "/contact"], ["Privacy", "/privacy"], ["Terms", "/terms"]] }
 ] as const;
 

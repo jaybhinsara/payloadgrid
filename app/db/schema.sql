@@ -451,6 +451,66 @@ create index if not exists alert_rules_project_id_idx on alert_rules(project_id)
 create index if not exists circuit_breaker_events_endpoint_created_at_idx on circuit_breaker_events(endpoint_id, created_at desc);
 create index if not exists webhook_events_parent_event_id_idx on webhook_events(parent_event_id);
 create index if not exists audit_logs_organization_created_at_idx on audit_logs(organization_id, created_at desc);
+
+create table if not exists blog_posts (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  title text not null,
+  excerpt text not null default '',
+  content_markdown text not null default '',
+  cover_image_url text,
+  cover_image_alt text,
+  category text not null default 'Engineering',
+  tags text[] not null default '{}',
+  status text not null default 'draft' check (status in ('draft', 'scheduled', 'published', 'archived')),
+  is_featured boolean not null default false,
+  seo_title text,
+  seo_description text,
+  author_id uuid references users(id) on delete set null,
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists blog_post_revisions (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references blog_posts(id) on delete cascade,
+  title text not null,
+  excerpt text not null,
+  content_markdown text not null,
+  cover_image_url text,
+  cover_image_alt text,
+  category text not null,
+  tags text[] not null default '{}',
+  status text not null,
+  is_featured boolean not null default false,
+  seo_title text,
+  seo_description text,
+  published_at timestamptz,
+  created_by uuid references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists blog_slug_redirects (
+  old_slug text primary key,
+  post_id uuid not null references blog_posts(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists platform_audit_logs (
+  id bigserial primary key,
+  actor_id uuid references users(id) on delete set null,
+  action text not null,
+  resource_type text not null,
+  resource_id text,
+  detail jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists blog_posts_publication_idx on blog_posts(status, published_at desc);
+create index if not exists blog_posts_featured_idx on blog_posts(is_featured, published_at desc);
+create index if not exists blog_post_revisions_post_idx on blog_post_revisions(post_id, created_at desc);
+create index if not exists platform_audit_logs_created_at_idx on platform_audit_logs(created_at desc);
 create table if not exists alert_notifications (
   id uuid primary key default gen_random_uuid(),
   rule_id uuid not null references alert_rules(id) on delete cascade,
