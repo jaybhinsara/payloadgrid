@@ -44,9 +44,14 @@ test("public blog exposes only due published content with SEO discovery", async 
   assert.match(page, /publicMetadata\(/);
   assert.match(article, /Article/);
   assert.match(article, /BreadcrumbList/);
+  assert.match(article, /type: "article"/);
+  assert.match(article, /cover_image_url/);
   assert.match(article, /permanentRedirect/);
   assert.match(rss, /application\/rss\+xml/);
+  assert.match(rss, /xmlns:atom/);
+  assert.match(rss, /lastBuildDate/);
   assert.match(sitemap, /listPublishedPosts/);
+  assert.match(sitemap, /dynamic = "force-dynamic"/);
   assert.match(sitemap, /\/blog\/\$\{post\.slug\}/);
 });
 

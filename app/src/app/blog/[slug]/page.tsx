@@ -13,7 +13,9 @@ type Params = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const post = await getPublishedPost((await params).slug);
   if (!post) return { title: "Article not found", robots: { index: false, follow: false } };
-  return publicMetadata({ title: post.seo_title || post.title, description: post.seo_description || post.excerpt, path: `/blog/${post.slug}` });
+  const title = post.seo_title || post.title; const description = post.seo_description || post.excerpt; const path = `/blog/${post.slug}`;
+  const base = publicMetadata({ title, description, path });
+  return { ...base, openGraph: { type: "article", url: path, siteName: "PayloadGrid", title, description, publishedTime: post.published_at || undefined, modifiedTime: post.updated_at, images: post.cover_image_url ? [{ url: post.cover_image_url, alt: post.cover_image_alt || post.title }] : undefined }, twitter: { card: "summary_large_image", title, description, images: post.cover_image_url ? [post.cover_image_url] : undefined } };
 }
 
 export default async function BlogArticlePage({ params }: Params) {
