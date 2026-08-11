@@ -22,6 +22,7 @@ export async function POST(_request: Request, contextValue: { params: Promise<{ 
       returning e.id, e.message_id
     `;
     if (!event) return NextResponse.json({ ok: false, error: "Only queued or retrying deliveries can be cancelled" }, { status: 409 });
+    await sql`update dispatch_jobs set status = 'cancelled', last_error = 'Delivery cancelled by user', locked_at = null, updated_at = now() where event_id = ${eventId} and status in ('pending','publishing','published')`;
     if (event.message_id) await updateMessageStatus(String(event.message_id));
     await writeAudit(context.organization.id, context.user.id, "event.cancelled", "event", eventId);
     return NextResponse.json({ ok: true, status: "cancelled" });

@@ -17,13 +17,18 @@ test("event contracts are standard, versioned, application scoped, and non-block
 });
 
 test("delivery search and controlled replay remain project scoped", async () => {
-  const [deliveries, replay, schema] = await Promise.all([read("../src/app/api/deliveries/route.ts"), read("../src/app/api/events/bulk-replay/route.ts"), read("../db/schema.sql")]);
+  const [deliveries, replay, cancel, worker, schema] = await Promise.all([read("../src/app/api/deliveries/route.ts"), read("../src/app/api/events/bulk-replay/route.ts"), read("../src/app/api/events/bulk-cancel/route.ts"), read("../src/lib/delivery-worker.ts"), read("../db/schema.sql")]);
   for (const term of ["headerName", "payloadPath", "eventType", "endpointId"]) assert.match(deliveries, new RegExp(term));
   assert.match(replay, /ep\.project_id = \$1/);
   assert.match(replay, /rateLimitPerMinute/);
   assert.match(replay, /distinct on/);
   assert.match(replay, /status='cancelled'/);
   assert.match(schema, /create table if not exists replay_batches/);
+  assert.match(cancel, /ep\.project_id = \$1/);
+  assert.match(cancel, /status in \('queued','received','retrying'\)/);
+  assert.match(cancel, /dispatch_jobs set status='cancelled'/);
+  assert.match(worker, /status in \('queued','received','retrying'\)/);
+  assert.match(schema, /'cancelled', 'failed'/);
 });
 
 test("catalog, embedded management, and CLI use scoped APIs", async () => {

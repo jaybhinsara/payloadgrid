@@ -278,7 +278,7 @@ alter table delivery_attempts add column if not exists response_headers jsonb no
 create table if not exists dispatch_jobs (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null unique references webhook_events(id) on delete cascade,
-  status text not null default 'pending' check (status in ('pending', 'publishing', 'published')),
+  status text not null default 'pending' check (status in ('pending', 'publishing', 'published', 'cancelled', 'failed')),
   available_at timestamptz not null default now(),
   publish_attempts integer not null default 0,
   qstash_message_id text,
@@ -288,6 +288,9 @@ create table if not exists dispatch_jobs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table dispatch_jobs drop constraint if exists dispatch_jobs_status_check;
+alter table dispatch_jobs add constraint dispatch_jobs_status_check check (status in ('pending', 'publishing', 'published', 'cancelled', 'failed'));
 
 alter table dispatch_jobs add column if not exists available_at timestamptz not null default now();
 alter table dispatch_jobs add column if not exists publish_attempts integer not null default 0;

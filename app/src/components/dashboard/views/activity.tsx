@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Braces, ChevronLeft, ChevronRight, Eye, MessageSquareText, Plus, RotateCcw, Search, Send } from "lucide-react";
+import { Activity, Ban, Braces, ChevronLeft, ChevronRight, Eye, MessageSquareText, Plus, RotateCcw, Search, Send } from "lucide-react";
 import { Empty, SectionHead, Status, timeAgo } from "@/components/dashboard/common";
 import type { DashboardData, DashboardMutate, DashboardSubmit, EventRow } from "@/components/dashboard/types";
 
 const REPLAYABLE_STATUSES = new Set(["delivered", "failed", "dead_letter", "resolved", "cancelled"]);
+const CANCELLABLE_STATUSES = new Set(["queued", "received", "retrying"]);
 
 export function MessagesView({ data, busy, submit }: { data: DashboardData; busy: string; submit: DashboardSubmit }) {
   const appName = (id: string) => data.applications.find((app) => app.id === id)?.name || "Application";
@@ -80,7 +81,10 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
     void poll(); timer=window.setInterval(()=>void poll(),3000); return()=>{active=false;if(timer)window.clearInterval(timer);};
   }, [replayBatch]);
 
-  const selectable = useMemo(() => events.filter((event) => REPLAYABLE_STATUSES.has(event.status)), [events]);
+  const selectable = useMemo(() => events.filter((event) => REPLAYABLE_STATUSES.has(event.status) || CANCELLABLE_STATUSES.has(event.status)), [events]);
+  const selectedEvents = useMemo(() => events.filter((event) => selected.has(event.id)), [events, selected]);
+  const canReplaySelection = selectedEvents.length > 0 && selectedEvents.every((event) => REPLAYABLE_STATUSES.has(event.status));
+  const canCancelSelection = selectedEvents.length > 0 && selectedEvents.every((event) => CANCELLABLE_STATUSES.has(event.status));
   const allSelected = selectable.length > 0 && selectable.every((event) => selected.has(event.id));
   function toggle(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
   function togglePage() { setSelected(allSelected ? new Set() : new Set(selectable.map((event) => event.id))); }
@@ -100,6 +104,23 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
     const payload=await mutate("/api/events/bulk-replay",{filters,maxEvents:replayMax,rateLimitPerMinute:replayRate});
     if(payload){setReplayBatch(String(payload.batchId));setNotice(`${Number(payload.accepted||0)} matching deliveries accepted for controlled replay.`);}
   }
+  async function cancelSelected() {
+    if (!window.confirm(`Cancel ${selected.size} selected deliveries? They will not be retried.`)) return;
+    const payload = await mutate("/api/events/bulk-cancel", { eventIds: [...selected], maxEvents: selected.size });
+    if (payload) { setNotice(`${Number(payload.cancelled || 0)} deliveries cancelled.`); setSelected(new Set()); setReload((value) => value + 1); }
+  }
+  async function cancelFiltered() {
+    if (!CANCELLABLE_STATUSES.has(status)) return;
+    const filters: Record<string,string> = { status };
+    if(direction!=="all")filters.direction=direction;
+    if(endpointId!=="all")filters.endpointId=endpointId;
+    if(eventType)filters.eventType=eventType;
+    if(payloadPath){filters.payloadPath=payloadPath;if(payloadValue)filters.payloadValue=payloadValue;}
+    if(headerName){filters.headerName=headerName;if(headerValue)filters.headerValue=headerValue;}
+    if (!window.confirm(`Cancel all matching ${status} deliveries, up to 5,000? They will not be retried.`)) return;
+    const payload = await mutate("/api/events/bulk-cancel", { filters, maxEvents: 5000 });
+    if (payload) { setNotice(`${Number(payload.cancelled || 0)} matching deliveries cancelled.${payload.limitReached ? " The 5,000-event safety limit was reached; run the action again for any remaining matches." : ""}`); setReload((value) => value + 1); }
+  }
 
   return <><SectionHead eyebrow="Delivery operations" heading="Deliveries" copy="Inspect complete attempt history, control retries, and recover dead-lettered events." />
     {notice ? <div className="view-notice">{notice}<button onClick={() => setNotice("")}>Dismiss</button></div> : null}
@@ -115,10 +136,10 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
       <input aria-label="Header name" value={headerName} onChange={(event) => setHeaderName(event.target.value)} placeholder="Header: x-request-id" />
       <input aria-label="Header value" value={headerValue} onChange={(event) => setHeaderValue(event.target.value)} placeholder="Header value" disabled={!headerName} />
     </section>
-    <section className="filtered-replay"><span><strong>Controlled replay</strong> Replay the current structured filter set with deduplication.</span><label>Maximum <input type="number" min="1" max="500" value={replayMax} onChange={(event)=>setReplayMax(Number(event.target.value))}/></label><label>Rate/min <input type="number" min="1" max="10000" value={replayRate} onChange={(event)=>setReplayRate(Number(event.target.value))}/></label><button className="button secondary small" onClick={()=>void replayFiltered()}><RotateCcw size={14}/> Replay matching</button></section>
-    {selected.size ? <section className="bulk-toolbar"><strong>{selected.size} selected</strong><label>Rate/min <input type="number" min="1" max="10000" value={replayRate} onChange={(event) => setReplayRate(Number(event.target.value))} /></label><button className="button secondary small" onClick={() => setSelected(new Set())}>Clear</button><button className="button primary small" disabled={selected.size > 500} onClick={() => void replaySelected()}><RotateCcw size={14} /> Start controlled replay</button></section> : null}
+    <section className="filtered-replay"><span><strong>Bulk operations</strong> Replay terminal deliveries or cancel pending retries using the current structured filters.</span><label>Maximum <input type="number" min="1" max="500" value={replayMax} onChange={(event)=>setReplayMax(Number(event.target.value))}/></label><label>Rate/min <input type="number" min="1" max="10000" value={replayRate} onChange={(event)=>setReplayRate(Number(event.target.value))}/></label><button className="button secondary small" onClick={()=>void replayFiltered()}><RotateCcw size={14}/> Replay matching</button>{CANCELLABLE_STATUSES.has(status)?<button className="button danger small" onClick={()=>void cancelFiltered()}><Ban size={14}/> Cancel matching</button>:null}</section>
+    {selected.size ? <section className="bulk-toolbar"><strong>{selected.size} selected</strong>{canReplaySelection?<label>Rate/min <input type="number" min="1" max="10000" value={replayRate} onChange={(event) => setReplayRate(Number(event.target.value))} /></label>:null}<button className="button secondary small" onClick={() => setSelected(new Set())}>Clear</button>{canCancelSelection?<button className="button danger small" onClick={() => void cancelSelected()}><Ban size={14} /> Cancel selected</button>:null}{canReplaySelection?<button className="button primary small" disabled={selected.size > 500} onClick={() => void replaySelected()}><RotateCcw size={14} /> Start controlled replay</button>:null}</section> : null}
     {replayBatch ? <section className="view-notice"><span>Replay batch <code>{replayBatch.slice(0,12)}</code> · {replayProgress?`${replayProgress.delivered} delivered · ${replayProgress.pending} pending · ${replayProgress.failed} failed · ${replayProgress.status}`:"Loading progress…"}</span>{!replayProgress||replayProgress.status==="running"?<button onClick={() => void mutate("/api/events/bulk-replay", { batchId: replayBatch }, "PATCH").then((value) => {if(value){setReplayBatch("");setReplayProgress(null);}})}>Cancel batch</button>:<button onClick={()=>{setReplayBatch("");setReplayProgress(null);}}>Dismiss</button>}</section> : null}
-    <section ref={tableRef} className="content-card delivery-list" aria-busy={loading}>{events.length ? <div className="data-table delivery-table operations-table"><div className="table-header"><span><input type="checkbox" checked={allSelected} onChange={togglePage} aria-label="Select page" /></span><span>Event</span><span>Direction</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Attempts</span><span>Time</span><span /></div>{events.map((event) => <div className="table-row" key={event.id}><span><input type="checkbox" checked={selected.has(event.id)} disabled={!REPLAYABLE_STATUSES.has(event.status)} onChange={() => toggle(event.id)} aria-label={`Select ${event.event_type}`} /></span><span><strong>{event.event_type}</strong><small>{event.provider_event_id || event.id.slice(0, 12)}</small></span><span><i className="direction-pill">{event.direction}</i></span><span>{event.endpoint_name}</span><span><Status value={event.status} /></span><span>{event.response_status ? `HTTP ${event.response_status}` : event.error || event.last_error || "No response"}</span><span>{event.attempt_count}/{event.max_retries}</span><span>{timeAgo(event.received_at)}</span><span className="row-actions"><button className="icon-button" onClick={() => inspect(event)} title="Inspect attempts"><Eye size={15} /></button><button className="icon-button" disabled={!REPLAYABLE_STATUSES.has(event.status)} onClick={() => void replayOne(event.id)} title="Replay"><RotateCcw size={15} /></button></span></div>)}</div> : <Empty icon={<Activity size={22} />} title="No matching deliveries" copy="Change the filters or send an event to this workspace." />}</section>
+    <section ref={tableRef} className="content-card delivery-list" aria-busy={loading}>{events.length ? <div className="data-table delivery-table operations-table"><div className="table-header"><span><input type="checkbox" checked={allSelected} onChange={togglePage} aria-label="Select page" /></span><span>Event</span><span>Direction</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Attempts</span><span>Time</span><span /></div>{events.map((event) => <div className="table-row" key={event.id}><span><input type="checkbox" checked={selected.has(event.id)} disabled={!REPLAYABLE_STATUSES.has(event.status) && !CANCELLABLE_STATUSES.has(event.status)} onChange={() => toggle(event.id)} aria-label={`Select ${event.event_type}`} /></span><span><strong>{event.event_type}</strong><small>{event.provider_event_id || event.id.slice(0, 12)}</small></span><span><i className="direction-pill">{event.direction}</i></span><span>{event.endpoint_name}</span><span><Status value={event.status} /></span><span>{event.response_status ? `HTTP ${event.response_status}` : event.error || event.last_error || "No response"}</span><span>{event.attempt_count}/{event.max_retries}</span><span>{timeAgo(event.received_at)}</span><span className="row-actions"><button className="icon-button" onClick={() => inspect(event)} title="Inspect attempts"><Eye size={15} /></button><button className="icon-button" disabled={!REPLAYABLE_STATUSES.has(event.status)} onClick={() => void replayOne(event.id)} title="Replay"><RotateCcw size={15} /></button></span></div>)}</div> : <Empty icon={<Activity size={22} />} title="No matching deliveries" copy="Change the filters or send an event to this workspace." />}</section>
     <nav className="table-pagination" aria-label="Delivery pages"><span>Page {cursorHistory.length + 1}</span><div><button className="icon-button" disabled={!cursorHistory.length || loading} onClick={() => setCursorHistory((value) => value.slice(0, -1))} aria-label="Previous page"><ChevronLeft size={16} /></button><button className="icon-button" disabled={!nextCursor || loading} onClick={() => nextCursor && setCursorHistory((value) => [...value, nextCursor])} aria-label="Next page"><ChevronRight size={16} /></button></div></nav>
   </>;
 }

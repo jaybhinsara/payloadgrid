@@ -72,7 +72,7 @@ export async function PATCH(request: Request) {
     const context = await requireSession(); requireRole(context, ["owner", "admin", "developer"]); const { batchId } = batchQuery.parse(await request.json()); const sql = requireSql();
     const [batch] = await sql`update replay_batches set status='cancelled', cancelled_at=now(), updated_at=now() where id=${batchId} and project_id=${context.project.id} and status='running' returning id`;
     if (!batch) return NextResponse.json({ ok: false, error: "Running replay batch not found" }, { status: 404 });
-    await sql`update dispatch_jobs set status='failed', last_error='Replay batch cancelled', updated_at=now() where replay_batch_id=${batchId} and status='pending'`;
+    await sql`update dispatch_jobs set status='cancelled', last_error='Replay batch cancelled', locked_at=null, updated_at=now() where replay_batch_id=${batchId} and status in ('pending','publishing','published')`;
     await sql`update webhook_events e set status='cancelled', cancelled_at=now(), updated_at=now() from replay_batch_items i where i.batch_id=${batchId} and i.event_id=e.id and e.status='queued'`;
     await writeAudit(context.organization.id, context.user.id, "event.bulk_replay_cancelled", "replay_batch", batchId);
     return NextResponse.json({ ok: true, batchId });

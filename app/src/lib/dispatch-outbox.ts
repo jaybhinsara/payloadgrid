@@ -86,7 +86,7 @@ export async function dispatchOutboxBatch(limit = 25, eventId?: string): Promise
         await sql`
           update dispatch_jobs set status = 'published', qstash_message_id = ${result.messageId},
             last_error = null, locked_at = null, published_at = now(), updated_at = now()
-          where id = ${job.id}
+          where id = ${job.id} and status = 'publishing'
         `;
         return { eventId: String(job.event_id), published: true, mode: "qstash" as const };
       }
@@ -94,7 +94,7 @@ export async function dispatchOutboxBatch(limit = 25, eventId?: string): Promise
       if (job.next_retry_at && new Date(job.next_retry_at).getTime() > Date.now()) {
         await sql`
           update dispatch_jobs set status = 'pending', available_at = ${job.next_retry_at},
-            locked_at = null, updated_at = now() where id = ${job.id}
+            locked_at = null, updated_at = now() where id = ${job.id} and status = 'publishing'
         `;
         return { eventId: String(job.event_id), published: false, deferred: true };
       }
@@ -102,7 +102,7 @@ export async function dispatchOutboxBatch(limit = 25, eventId?: string): Promise
       const result: unknown = await processDelivery(String(job.event_id));
       await sql`
         update dispatch_jobs set status = 'published', last_error = null, locked_at = null,
-          published_at = now(), updated_at = now() where id = ${job.id}
+          published_at = now(), updated_at = now() where id = ${job.id} and status = 'publishing'
       `;
       return { eventId: String(job.event_id), published: true, mode: "direct" as const, result };
     } catch (error) {
@@ -110,7 +110,7 @@ export async function dispatchOutboxBatch(limit = 25, eventId?: string): Promise
       const [current] = await sql`select publish_attempts from dispatch_jobs where id = ${job.id}`;
       await sql`
         update dispatch_jobs set status = 'pending', available_at = ${retryAt(Number(current?.publish_attempts || 1)).toISOString()},
-          last_error = ${message}, locked_at = null, updated_at = now() where id = ${job.id}
+          last_error = ${message}, locked_at = null, updated_at = now() where id = ${job.id} and status = 'publishing'
       `;
       return { eventId: String(job.event_id), published: false, error: message };
     }
