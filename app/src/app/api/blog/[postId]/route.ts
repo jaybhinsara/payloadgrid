@@ -10,14 +10,20 @@ import { writePlatformAudit } from "@/lib/platform-audit";
 const idSchema = z.string().uuid();
 type Params = { params: Promise<{ postId: string }> };
 
+function toIsoTimestamp(value: unknown) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) throw new Error("Article publication timestamp is invalid");
+  return date.toISOString();
+}
+
 export async function GET(_: Request, { params }: Params) {
   try {
     const context = await requireSession(); requirePlatformOperator(context);
     const postId = idSchema.parse((await params).postId); const sql = requireSql();
     const [post] = await sql`select bp.*, u.name as author_name from blog_posts bp left join users u on u.id=bp.author_id where bp.id=${postId} limit 1`;
     if (!post) return NextResponse.json({ ok: false, error: "Article not found" }, { status: 404 });
-    const revisions = await sql`select br.*, u.name as created_by_name from blog_post_revisions br left join users u on u.id=br.created_by where br.post_id=${postId} order by br.created_at desc limit 30`;
-    return NextResponse.json({ ok: true, post, revisions }, { headers: { "cache-control": "no-store" } });
+    return NextResponse.json({ ok: true, post }, { headers: { "cache-control": "no-store" } });
   } catch (error) { const result = authErrorResponse(error); return NextResponse.json({ ok: false, error: result.message }, { status: error instanceof z.ZodError ? 400 : result.status }); }
 }
 
@@ -28,11 +34,8 @@ export async function PATCH(request: Request, { params }: Params) {
     const [current] = await sql`select * from blog_posts where id=${postId} limit 1`;
     if (!current) return NextResponse.json({ ok: false, error: "Article not found" }, { status: 404 });
     const slug = normalizeBlogSlug(body.slug || body.title);
-    const publishedAt = body.status === "published" ? body.publishedAt || current.published_at || new Date().toISOString() : body.publishedAt || null;
-    await sql`
-      insert into blog_post_revisions (post_id, title, excerpt, content_markdown, cover_image_url, cover_image_alt, category, tags, status, is_featured, seo_title, seo_description, published_at, created_by)
-      values (${postId}, ${String(current.title)}, ${String(current.excerpt)}, ${String(current.content_markdown)}, ${current.cover_image_url ? String(current.cover_image_url) : null}, ${current.cover_image_alt ? String(current.cover_image_alt) : null}, ${String(current.category)}, ${current.tags as string[]}, ${String(current.status)}, ${Boolean(current.is_featured)}, ${current.seo_title ? String(current.seo_title) : null}, ${current.seo_description ? String(current.seo_description) : null}, ${current.published_at ? String(current.published_at) : null}, ${context.user.id})
-    `;
+    const currentPublishedAt = toIsoTimestamp(current.published_at);
+    const publishedAt = body.status === "published" ? body.publishedAt || currentPublishedAt || new Date().toISOString() : body.publishedAt || null;
     if (String(current.slug) !== slug && ["published", "scheduled"].includes(String(current.status))) {
       await sql`insert into blog_slug_redirects (old_slug, post_id) values (${String(current.slug)}, ${postId}) on conflict (old_slug) do update set post_id=excluded.post_id`;
     }

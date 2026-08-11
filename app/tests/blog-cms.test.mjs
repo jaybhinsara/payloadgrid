@@ -4,9 +4,9 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("blog storage is additive and preserves revisions and old slugs", async () => {
+test("blog storage is additive and preserves old slugs", async () => {
   const schema = await read("db/schema.sql");
-  for (const table of ["blog_posts", "blog_post_revisions", "blog_slug_redirects", "platform_audit_logs"]) {
+  for (const table of ["blog_posts", "blog_slug_redirects", "platform_audit_logs"]) {
     assert.match(schema, new RegExp(`create table if not exists ${table}`));
   }
   assert.match(schema, /check \(status in \('draft', 'scheduled', 'published', 'archived'\)\)/);
@@ -28,6 +28,9 @@ test("every blog mutation requires a platform operator", async () => {
   assert.match(upload, /image\/webp/);
   assert.match(collection, /writePlatformAudit/);
   assert.match(article, /writePlatformAudit/);
+  assert.doesNotMatch(collection + article, /insert into blog_post_revisions/);
+  assert.match(article, /toIsoTimestamp\(current\.published_at\)/);
+  assert.doesNotMatch(article, /String\(current\.published_at\)/);
   assert.doesNotMatch(collection + article, /writeAudit\(context\.organization\.id/);
 });
 
@@ -71,7 +74,7 @@ test("dashboard publishing UI is hidden from customer workspace admins", async (
   ]);
   assert.match(dashboard, /item\.id !== "blog" \|\| data\.system\.operator/);
   assert.match(dashboard, /view === "blog" && data\.system\.operator/);
-  assert.match(editor, /Revision history/);
+  assert.doesNotMatch(editor, /Revision history|recent snapshots|Restore/);
   assert.match(editor, /SEO metadata/);
   assert.match(editor, /Upload image/);
 });

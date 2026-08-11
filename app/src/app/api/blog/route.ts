@@ -15,8 +15,7 @@ export async function GET() {
     const context = await requireSession(); requirePlatformOperator(context);
     const sql = requireSql();
     const posts = await sql`
-      select bp.*, u.name as author_name,
-        (select count(*)::int from blog_post_revisions br where br.post_id=bp.id) as revision_count
+      select bp.*, u.name as author_name
       from blog_posts bp left join users u on u.id=bp.author_id
       order by coalesce(bp.published_at, bp.updated_at) desc
     `;
@@ -39,10 +38,6 @@ export async function POST(request: Request) {
       insert into blog_posts (slug, title, excerpt, content_markdown, cover_image_url, cover_image_alt, category, tags, status, is_featured, seo_title, seo_description, author_id, published_at)
       values (${slug}, ${body.title}, ${body.excerpt}, ${body.contentMarkdown}, ${body.coverImageUrl || null}, ${body.coverImageAlt || null}, ${body.category}, ${body.tags}, ${body.status}, ${body.isFeatured}, ${body.seoTitle || null}, ${body.seoDescription || null}, ${context.user.id}, ${publishedAt})
       returning *
-    `;
-    await sql`
-      insert into blog_post_revisions (post_id, title, excerpt, content_markdown, cover_image_url, cover_image_alt, category, tags, status, is_featured, seo_title, seo_description, published_at, created_by)
-      values (${post.id}, ${body.title}, ${body.excerpt}, ${body.contentMarkdown}, ${body.coverImageUrl || null}, ${body.coverImageAlt || null}, ${body.category}, ${body.tags}, ${body.status}, ${body.isFeatured}, ${body.seoTitle || null}, ${body.seoDescription || null}, ${publishedAt}, ${context.user.id})
     `;
     await writePlatformAudit(context.user.id, "blog_post.created", "blog_post", String(post.id), { slug, status: body.status });
     return NextResponse.json({ ok: true, post }, { status: 201 });
