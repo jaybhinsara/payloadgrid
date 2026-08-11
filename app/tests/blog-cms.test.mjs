@@ -51,10 +51,12 @@ test("public blog exposes only due published content with SEO discovery", async 
 });
 
 test("markdown rendering does not enable raw HTML", async () => {
-  const markdown = await read("src/components/blog/markdown-content.tsx");
+  const [markdown, toolbar] = await Promise.all([read("src/components/blog/markdown-content.tsx"), read("src/components/blog/markdown-toolbar.tsx")]);
   assert.match(markdown, /ReactMarkdown/);
   assert.match(markdown, /remarkGfm/);
+  assert.match(markdown, /remarkUnderline/);
   assert.doesNotMatch(markdown, /rehypeRaw|dangerouslySetInnerHTML/);
+  for (const action of ["Heading 2", "Bold", "Italic", "Underline", "Link", "Bulleted list", "Numbered list", "Quote", "Code", "Divider"]) assert.match(toolbar, new RegExp(action));
 });
 
 test("dashboard publishing UI is hidden from customer workspace admins", async () => {
