@@ -7,7 +7,7 @@ export type ReplayTarget = {
   rate_limit_per_minute: number | string;
 };
 
-export async function scheduleReplay(target: ReplayTarget) {
+export async function scheduleReplay(target: ReplayTarget, options: { availableAt?: Date; batchId?: string } = {}) {
   const sql = requireSql();
   const attempt = Number(target.attempt_count || 0) + 1;
   const [result] = await sql`
@@ -18,10 +18,10 @@ export async function scheduleReplay(target: ReplayTarget) {
       where id = ${target.id}
       returning id
     ), scheduled as (
-      insert into dispatch_jobs (event_id, status, available_at, last_error, locked_at, qstash_message_id, published_at, updated_at)
-      select id, 'pending', now(), null, null, null, null, now() from replayed
-      on conflict (event_id) do update set status = 'pending', available_at = now(), last_error = null,
-        locked_at = null, qstash_message_id = null, published_at = null, updated_at = now()
+      insert into dispatch_jobs (event_id, status, available_at, last_error, locked_at, qstash_message_id, published_at, updated_at, replay_batch_id)
+      select id, 'pending', ${options.availableAt || new Date()}, null, null, null, null, now(), ${options.batchId || null} from replayed
+      on conflict (event_id) do update set status = 'pending', available_at = excluded.available_at, last_error = null,
+        locked_at = null, qstash_message_id = null, published_at = null, updated_at = now(), replay_batch_id = excluded.replay_batch_id
       returning event_id
     )
     select event_id from scheduled

@@ -1,7 +1,7 @@
 {
   "name": "payloadgrid-cli",
-  "version": "0.1.0",
-  "description": "PayloadGrid local webhook relay",
+  "version": "0.2.0",
+  "description": "PayloadGrid webhook relay, live tail, inspection, and event type generator",
   "keywords": ["payloadgrid", "webhook", "relay", "localhost", "developer-tools"],
   "homepage": "https://payloadgrid.com",
   "repository": {

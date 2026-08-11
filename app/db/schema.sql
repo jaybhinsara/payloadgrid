@@ -119,6 +119,25 @@ create table if not exists event_types (
   unique (project_id, name)
 );
 
+alter table event_types add column if not exists application_id uuid references applications(id) on delete cascade;
+alter table event_types drop constraint if exists event_types_project_id_name_key;
+create unique index if not exists event_types_scope_name_idx on event_types(project_id, coalesce(application_id, '00000000-0000-0000-0000-000000000000'::uuid), name);
+
+create table if not exists event_contract_versions (
+  id uuid primary key default gen_random_uuid(),
+  event_type_id uuid not null references event_types(id) on delete cascade,
+  version integer not null check (version > 0),
+  schema jsonb not null,
+  example jsonb,
+  compatibility_mode text not null default 'backward' check (compatibility_mode in ('backward','none')),
+  compatibility_warnings jsonb not null default '[]'::jsonb,
+  status text not null default 'published' check (status in ('draft','published','deprecated')),
+  created_by uuid references users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  published_at timestamptz,
+  unique (event_type_id, version)
+);
+
 create table if not exists endpoints (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects(id) on delete cascade,
@@ -229,6 +248,10 @@ alter table webhook_events add column if not exists resolved_by uuid references 
 alter table webhook_events add column if not exists resolution_note text;
 alter table webhook_events add column if not exists request_content_type text not null default 'application/json';
 alter table webhook_events add column if not exists request_raw_body text;
+alter table webhook_events add column if not exists contract_version integer;
+alter table webhook_events add column if not exists validation_warnings jsonb not null default '[]'::jsonb;
+alter table messages add column if not exists contract_version integer;
+alter table messages add column if not exists validation_warnings jsonb not null default '[]'::jsonb;
 alter table webhook_events add column if not exists is_simulation boolean not null default false;
 alter table webhook_events add column if not exists parent_event_id uuid references webhook_events(id) on delete set null;
 alter table webhook_events alter column status set default 'queued';
@@ -374,6 +397,7 @@ create index if not exists sessions_expires_at_idx on sessions(expires_at);
 create index if not exists projects_organization_id_idx on projects(organization_id);
 create index if not exists applications_project_id_idx on applications(project_id);
 create index if not exists event_types_project_id_idx on event_types(project_id);
+create index if not exists event_contract_versions_event_type_idx on event_contract_versions(event_type_id, version desc);
 create index if not exists endpoints_project_id_idx on endpoints(project_id);
 create index if not exists endpoints_application_id_idx on endpoints(application_id);
 create index if not exists messages_application_created_at_idx on messages(application_id, created_at desc);
@@ -384,6 +408,34 @@ create index if not exists webhook_events_status_received_at_idx on webhook_even
 create index if not exists webhook_events_next_retry_at_idx on webhook_events(next_retry_at) where status = 'retrying';
 create index if not exists webhook_events_dead_letter_idx on webhook_events(received_at desc, id desc) where status = 'dead_letter';
 create index if not exists webhook_events_cursor_idx on webhook_events(received_at desc, id desc);
+create index if not exists webhook_events_event_type_received_idx on webhook_events(event_type, received_at desc);
+create index if not exists webhook_events_headers_gin_idx on webhook_events using gin(request_headers jsonb_path_ops);
+create index if not exists webhook_events_body_gin_idx on webhook_events using gin(request_body jsonb_path_ops);
+
+create table if not exists replay_batches (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  created_by uuid references users(id) on delete set null,
+  status text not null default 'running' check (status in ('running','completed','cancelled','failed')),
+  filters jsonb not null default '{}'::jsonb,
+  rate_limit_per_minute integer not null default 120 check (rate_limit_per_minute between 1 and 10000),
+  requested_count integer not null default 0,
+  accepted_count integer not null default 0,
+  cancelled_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists replay_batch_items (
+  batch_id uuid not null references replay_batches(id) on delete cascade,
+  event_id uuid not null references webhook_events(id) on delete cascade,
+  position integer not null,
+  primary key (batch_id, event_id)
+);
+
+alter table dispatch_jobs add column if not exists replay_batch_id uuid references replay_batches(id) on delete set null;
+create index if not exists replay_batches_project_created_idx on replay_batches(project_id, created_at desc);
+create index if not exists replay_batch_items_batch_idx on replay_batch_items(batch_id, position);
 create index if not exists webhook_events_queue_idx on webhook_events(status, received_at) where status in ('queued', 'processing', 'retrying');
 create unique index if not exists webhook_events_provider_dedup_idx on webhook_events(endpoint_id, provider_event_id) where provider_event_id is not null;
 create index if not exists webhook_events_payload_expiry_idx on webhook_events(payload_expires_at) where payload_redacted_at is null;

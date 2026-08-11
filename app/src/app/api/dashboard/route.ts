@@ -42,7 +42,7 @@ export async function GET() {
         order by e.received_at desc limit 100
       `,
       sql`select id, application_id, event_type, status, created_at from messages where project_id = ${context.project.id} order by created_at desc limit 50`,
-      sql`select id, name, description, schema, created_at from event_types where project_id = ${context.project.id} order by name asc`,
+      sql`select et.id, et.application_id, et.name, et.description, et.schema, et.created_at, current.version as current_version, current.example, current.compatibility_warnings from event_types et left join lateral (select version, example, compatibility_warnings from event_contract_versions where event_type_id=et.id and status='published' order by version desc limit 1) current on true where et.project_id = ${context.project.id} order by et.name asc`,
       sql`select id, name, key_prefix, scopes, last_used_at, revoked_at, created_at from api_keys where project_id = ${context.project.id} order by created_at desc`,
       sql`select u.id, u.name, u.email, om.role, om.created_at from organization_members om join users u on u.id = om.user_id where om.organization_id = ${context.organization.id} order by om.created_at asc`,
       sql`select id, name, event_type, config, is_active, created_at from transformations where project_id = ${context.project.id} order by created_at desc`,

@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import { EmbedDeliveryTable, type EmbeddedEvent } from "@/components/embed-delivery-table";
+import { EmbedEndpointManager } from "@/components/embed-endpoint-manager";
 import { verifyEmbedToken } from "@/lib/embed";
 import { requireSql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Delivery history", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
-export default async function EmbeddedDeliveries({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const token = (await searchParams).token || "";
+export default async function EmbeddedDeliveries({ searchParams }: { searchParams: Promise<{ token?: string; view?: string }> }) {
+  const parameters = await searchParams;
+  const token = parameters.token || "";
+  const view = parameters.view === "endpoints" || parameters.view === "deliveries" ? parameters.view : "portal";
   const claims = verifyEmbedToken(token);
   if (!claims) return <main className="embed-shell"><section className="embed-error"><h1>Link expired</h1><p>Request a fresh delivery-history link from the host application.</p></section></main>;
   const sql = requireSql();
@@ -27,5 +30,7 @@ export default async function EmbeddedDeliveries({ searchParams }: { searchParam
     latencyMs: event.latency_ms ? Number(event.latency_ms) : null,
     receivedAt: String(event.received_at), simulation: Boolean(event.is_simulation)
   }));
-  return <main className="embed-shell"><header><div><span>PAYLOADGRID DELIVERY HISTORY</span><h1>{String(application.name)}</h1></div><i>Live evidence</i></header><EmbedDeliveryTable initialEvents={tableEvents} token={token} canReplay={claims.permissions.includes("deliveries:replay")} /></main>;
+  const showDeliveries = view !== "endpoints" && claims.permissions.includes("deliveries:read");
+  const showEndpoints = view !== "deliveries" && claims.permissions.includes("endpoints:read");
+  return <main className="embed-shell"><header><div><span>PAYLOADGRID CUSTOMER PORTAL</span><h1>{String(application.name)}</h1></div><i>Permission scoped</i></header>{showDeliveries?<EmbedDeliveryTable initialEvents={tableEvents} token={token} canReplay={claims.permissions.includes("deliveries:replay")} />:null}{showEndpoints?<EmbedEndpointManager token={token} canCreate={claims.permissions.includes("endpoints:write")} canSubscribe={claims.permissions.includes("subscriptions:write")} canRotate={claims.permissions.includes("secrets:rotate")} />:null}</main>;
 }

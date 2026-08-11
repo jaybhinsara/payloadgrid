@@ -8,6 +8,10 @@ export const ACTIVE_PROJECT_COOKIE = "payloadgrid_project";
 const SESSION_DAYS = 30;
 const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: SESSION_DAYS * 86400 };
 
+export async function hasSessionCookie() {
+  return Boolean((await cookies()).get(SESSION_COOKIE)?.value);
+}
+
 export type SessionContext = {
   user: { id: string; name: string; email: string };
   organization: { id: string; name: string; slug: string; plan: string; role: string };

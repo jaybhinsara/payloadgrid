@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { requireSql } from "@/lib/db";
 import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 import { queueConfigured } from "@/lib/queue";
+import { validateEventPayload } from "@/lib/event-contracts";
 
 export type AcceptMessageInput = {
   projectId: string;
@@ -56,21 +57,22 @@ export async function acceptMessage(input: AcceptMessageInput) {
       and (event_type is null or event_type = ${input.eventType}) order by created_at asc
   `;
   const payload = transformPayload(input.payload, transformations.map((row) => row.config));
+  const validation = await validateEventPayload(input.projectId, input.applicationId, input.eventType, payload);
   const messageId = randomUUID();
   const [accepted] = await sql`
     with accepted_message as (
-      insert into messages (id, project_id, application_id, event_type, idempotency_key, payload, status)
-      values (${messageId}, ${input.projectId}, ${input.applicationId}, ${input.eventType}, ${input.idempotencyKey || null}, ${JSON.stringify(payload)}::jsonb, 'queued')
+      insert into messages (id, project_id, application_id, event_type, idempotency_key, payload, status, contract_version, validation_warnings)
+      values (${messageId}, ${input.projectId}, ${input.applicationId}, ${input.eventType}, ${input.idempotencyKey || null}, ${JSON.stringify(payload)}::jsonb, 'queued', ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb)
       on conflict (project_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key
       returning id, id = ${messageId}::uuid as inserted
     ), inserted_events as (
       insert into webhook_events (
         endpoint_id, application_id, message_id, direction, provider, provider_event_id,
-        event_type, request_body, status, max_retries
+        event_type, request_body, status, max_retries, contract_version, validation_warnings
       )
       select ep.id, ${input.applicationId}, am.id, 'outbound', 'payloadgrid', am.id::text,
         ${input.eventType}, ${JSON.stringify(payload)}::jsonb,
-        case when ep.circuit_state = 'open' then 'buffered' else 'queued' end, 6
+        case when ep.circuit_state = 'open' then 'buffered' else 'queued' end, 6, ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb
       from accepted_message am
       join endpoints ep on ep.project_id = ${input.projectId} and ep.application_id = ${input.applicationId}
         and ep.is_active = true and ep.deleted_at is null
@@ -101,6 +103,7 @@ export async function acceptMessage(input: AcceptMessageInput) {
   return {
     messageId: String(accepted.id), status: duplicate ? String(accepted.status) : Number(accepted.delivery_count) ? "accepted" : "delivered",
     duplicate, queuedDeliveries: duplicate ? 0 : Number(accepted.delivery_count || 0),
-    scheduledDeliveries: duplicate ? 0 : dispatchCount, queueConfigured: queueConfigured()
+    scheduledDeliveries: duplicate ? 0 : dispatchCount, queueConfigured: queueConfigured(),
+    contractVersion: validation.contractVersion, validationWarnings: validation.warnings
   };
 }

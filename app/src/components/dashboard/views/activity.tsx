@@ -24,6 +24,15 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
   const [status, setStatus] = useState("all");
   const [direction, setDirection] = useState("all");
   const [endpointId, setEndpointId] = useState("all");
+  const [eventType, setEventType] = useState("");
+  const [payloadPath, setPayloadPath] = useState("");
+  const [payloadValue, setPayloadValue] = useState("");
+  const [headerName, setHeaderName] = useState("");
+  const [headerValue, setHeaderValue] = useState("");
+  const [replayRate, setReplayRate] = useState(120);
+  const [replayBatch, setReplayBatch] = useState("");
+  const [replayProgress, setReplayProgress] = useState<{ delivered: number; failed: number; pending: number; status: string } | null>(null);
+  const [replayMax, setReplayMax] = useState(100);
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -38,7 +47,7 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
   useEffect(() => { if (refreshInitialized.current) setReload((value) => value + 1); else refreshInitialized.current = true; }, [refreshVersion]);
 
   useEffect(() => { const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300); return () => window.clearTimeout(timer); }, [search]);
-  useEffect(() => { setCursorHistory([]); }, [debouncedSearch, status, direction, endpointId]);
+  useEffect(() => { setCursorHistory([]); }, [debouncedSearch, status, direction, endpointId, eventType, payloadPath, payloadValue, headerName, headerValue]);
   useEffect(() => {
     tableRef.current?.scrollTo({ left: 0, behavior: "smooth" });
   }, [cursor, debouncedSearch, status, direction, endpointId]);
@@ -49,6 +58,11 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
     if (status !== "all") params.set("status", status);
     if (direction !== "all") params.set("direction", direction);
     if (endpointId !== "all") params.set("endpointId", endpointId);
+    if (eventType) params.set("eventType", eventType);
+    if (payloadPath) params.set("payloadPath", payloadPath);
+    if (payloadPath && payloadValue) params.set("payloadValue", payloadValue);
+    if (headerName) params.set("headerName", headerName);
+    if (headerName && headerValue) params.set("headerValue", headerValue);
     if (cursor) params.set("cursor", cursor);
     setLoading(true); setError(""); setNextCursor(null);
     fetch(`/api/deliveries?${params}`, { cache: "no-store", signal: controller.signal })
@@ -57,7 +71,14 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
       .catch((cause) => { if (cause instanceof Error && cause.name !== "AbortError") setError(cause.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [cursor, debouncedSearch, direction, endpointId, reload, status]);
+  }, [cursor, debouncedSearch, direction, endpointId, eventType, payloadPath, payloadValue, headerName, headerValue, reload, status]);
+  useEffect(() => {
+    if (!replayBatch) return;
+    let active = true;
+    let timer: number | undefined;
+    const poll = async () => { const response=await fetch(`/api/events/bulk-replay?batchId=${replayBatch}`,{cache:"no-store"}); const payload=await response.json().catch(()=>({})); if(active&&response.ok){const status=String(payload.batch.status||"running");setReplayProgress({delivered:Number(payload.batch.delivered||0),failed:Number(payload.batch.failed||0),pending:Number(payload.batch.pending||0),status});if(status!=="running"&&timer)window.clearInterval(timer);} };
+    void poll(); timer=window.setInterval(()=>void poll(),3000); return()=>{active=false;if(timer)window.clearInterval(timer);};
+  }, [replayBatch]);
 
   const selectable = useMemo(() => events.filter((event) => REPLAYABLE_STATUSES.has(event.status)), [events]);
   const allSelected = selectable.length > 0 && selectable.every((event) => selected.has(event.id));
@@ -65,8 +86,19 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
   function togglePage() { setSelected(allSelected ? new Set() : new Set(selectable.map((event) => event.id))); }
   async function replayOne(id: string) { const payload = await replay(id); if (payload) { setNotice("Replay accepted. Delivery state will update automatically."); setReload((value) => value + 1); } }
   async function replaySelected() {
-    const payload = await mutate("/api/events/bulk-replay", { eventIds: [...selected] });
-    if (payload) { setNotice(`${Number(payload.accepted || 0)} deliveries accepted for replay.`); setSelected(new Set()); setReload((value) => value + 1); }
+    const payload = await mutate("/api/events/bulk-replay", { eventIds: [...selected], rateLimitPerMinute: replayRate, maxEvents: selected.size });
+    if (payload) { setReplayBatch(String(payload.batchId || "")); setNotice(`${Number(payload.accepted || 0)} deduplicated deliveries accepted at ${replayRate}/minute.`); setSelected(new Set()); setReload((value) => value + 1); }
+  }
+  async function replayFiltered() {
+    const filters: Record<string,string> = {};
+    if(status!=="all"&&["delivered","failed","dead_letter","cancelled"].includes(status))filters.status=status;
+    if(direction!=="all")filters.direction=direction;
+    if(endpointId!=="all")filters.endpointId=endpointId;
+    if(eventType)filters.eventType=eventType;
+    if(payloadPath){filters.payloadPath=payloadPath;if(payloadValue)filters.payloadValue=payloadValue;}
+    if(headerName){filters.headerName=headerName;if(headerValue)filters.headerValue=headerValue;}
+    const payload=await mutate("/api/events/bulk-replay",{filters,maxEvents:replayMax,rateLimitPerMinute:replayRate});
+    if(payload){setReplayBatch(String(payload.batchId));setNotice(`${Number(payload.accepted||0)} matching deliveries accepted for controlled replay.`);}
   }
 
   return <><SectionHead eyebrow="Delivery operations" heading="Deliveries" copy="Inspect complete attempt history, control retries, and recover dead-lettered events." />
@@ -77,14 +109,21 @@ export function DeliveriesView({ initialEvents, endpoints, inspect, replay, muta
       <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option>{["queued", "processing", "retrying", "delivered", "failed", "dead_letter", "resolved", "cancelled", "received"].map((value) => <option key={value} value={value}>{value.replace("_", " ")}</option>)}</select>
       <select aria-label="Filter by direction" value={direction} onChange={(event) => setDirection(event.target.value)}><option value="all">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
       <select aria-label="Filter by endpoint" value={endpointId} onChange={(event) => setEndpointId(event.target.value)}><option value="all">All endpoints</option>{endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}</select>
-
+      <input aria-label="Filter by event type" value={eventType} onChange={(event) => setEventType(event.target.value)} placeholder="Event type" />
+      <input aria-label="JSON payload path" value={payloadPath} onChange={(event) => setPayloadPath(event.target.value)} placeholder="Payload path: order.id" />
+      <input aria-label="JSON payload value" value={payloadValue} onChange={(event) => setPayloadValue(event.target.value)} placeholder="Payload value" disabled={!payloadPath} />
+      <input aria-label="Header name" value={headerName} onChange={(event) => setHeaderName(event.target.value)} placeholder="Header: x-request-id" />
+      <input aria-label="Header value" value={headerValue} onChange={(event) => setHeaderValue(event.target.value)} placeholder="Header value" disabled={!headerName} />
     </section>
-    {selected.size ? <section className="bulk-toolbar"><strong>{selected.size} selected</strong><span>Replay up to 25 deliveries at once.</span><button className="button secondary small" onClick={() => setSelected(new Set())}>Clear</button><button className="button primary small" disabled={selected.size > 25} onClick={() => void replaySelected()}><RotateCcw size={14} /> Replay selected</button></section> : null}
+    <section className="filtered-replay"><span><strong>Controlled replay</strong> Replay the current structured filter set with deduplication.</span><label>Maximum <input type="number" min="1" max="500" value={replayMax} onChange={(event)=>setReplayMax(Number(event.target.value))}/></label><label>Rate/min <input type="number" min="1" max="10000" value={replayRate} onChange={(event)=>setReplayRate(Number(event.target.value))}/></label><button className="button secondary small" onClick={()=>void replayFiltered()}><RotateCcw size={14}/> Replay matching</button></section>
+    {selected.size ? <section className="bulk-toolbar"><strong>{selected.size} selected</strong><label>Rate/min <input type="number" min="1" max="10000" value={replayRate} onChange={(event) => setReplayRate(Number(event.target.value))} /></label><button className="button secondary small" onClick={() => setSelected(new Set())}>Clear</button><button className="button primary small" disabled={selected.size > 500} onClick={() => void replaySelected()}><RotateCcw size={14} /> Start controlled replay</button></section> : null}
+    {replayBatch ? <section className="view-notice"><span>Replay batch <code>{replayBatch.slice(0,12)}</code> · {replayProgress?`${replayProgress.delivered} delivered · ${replayProgress.pending} pending · ${replayProgress.failed} failed · ${replayProgress.status}`:"Loading progress…"}</span>{!replayProgress||replayProgress.status==="running"?<button onClick={() => void mutate("/api/events/bulk-replay", { batchId: replayBatch }, "PATCH").then((value) => {if(value){setReplayBatch("");setReplayProgress(null);}})}>Cancel batch</button>:<button onClick={()=>{setReplayBatch("");setReplayProgress(null);}}>Dismiss</button>}</section> : null}
     <section ref={tableRef} className="content-card delivery-list" aria-busy={loading}>{events.length ? <div className="data-table delivery-table operations-table"><div className="table-header"><span><input type="checkbox" checked={allSelected} onChange={togglePage} aria-label="Select page" /></span><span>Event</span><span>Direction</span><span>Endpoint</span><span>Status</span><span>Response</span><span>Attempts</span><span>Time</span><span /></div>{events.map((event) => <div className="table-row" key={event.id}><span><input type="checkbox" checked={selected.has(event.id)} disabled={!REPLAYABLE_STATUSES.has(event.status)} onChange={() => toggle(event.id)} aria-label={`Select ${event.event_type}`} /></span><span><strong>{event.event_type}</strong><small>{event.provider_event_id || event.id.slice(0, 12)}</small></span><span><i className="direction-pill">{event.direction}</i></span><span>{event.endpoint_name}</span><span><Status value={event.status} /></span><span>{event.response_status ? `HTTP ${event.response_status}` : event.error || event.last_error || "No response"}</span><span>{event.attempt_count}/{event.max_retries}</span><span>{timeAgo(event.received_at)}</span><span className="row-actions"><button className="icon-button" onClick={() => inspect(event)} title="Inspect attempts"><Eye size={15} /></button><button className="icon-button" disabled={!REPLAYABLE_STATUSES.has(event.status)} onClick={() => void replayOne(event.id)} title="Replay"><RotateCcw size={15} /></button></span></div>)}</div> : <Empty icon={<Activity size={22} />} title="No matching deliveries" copy="Change the filters or send an event to this workspace." />}</section>
     <nav className="table-pagination" aria-label="Delivery pages"><span>Page {cursorHistory.length + 1}</span><div><button className="icon-button" disabled={!cursorHistory.length || loading} onClick={() => setCursorHistory((value) => value.slice(0, -1))} aria-label="Previous page"><ChevronLeft size={16} /></button><button className="icon-button" disabled={!nextCursor || loading} onClick={() => nextCursor && setCursorHistory((value) => [...value, nextCursor])} aria-label="Next page"><ChevronRight size={16} /></button></div></nav>
   </>;
 }
 
 export function EventTypesView({ data, busy, submit }: { data: DashboardData; busy: string; submit: DashboardSubmit }) {
-  return <><SectionHead eyebrow="Event catalog" heading="Event types" copy="Define the event names customers can subscribe to." /><section className="split-layout"><form className="content-card form-card" onSubmit={(event) => submit(event, "/api/event-types", (form) => ({ name: form.get("name"), description: form.get("description") }))}><h3>Add event type</h3><label>Name<input name="name" required placeholder="invoice.payment_failed" /></label><label>Description<textarea name="description" placeholder="When this event is emitted" /></label><button className="button primary" disabled={busy === "/api/event-types"}><Plus size={16} /> Save event type</button></form><section className="content-card list-card">{data.eventTypes.length ? <div className="resource-list">{data.eventTypes.map((item) => <article key={item.id}><span className="resource-icon"><Braces size={18} /></span><div><strong>{item.name}</strong><small>{item.description || "No description"}</small></div><span>{data.endpoints.filter((endpoint) => endpoint.event_types.includes(item.name)).length} subscribers</span></article>)}</div> : <Empty icon={<Braces size={22} />} title="No event types" copy="Add event types to make endpoint subscriptions easier to manage." />}</section></section></>;
+  const defaultSchema = JSON.stringify({ $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", properties: { id: { type: "string" } }, required: ["id"] }, null, 2);
+  return <><SectionHead eyebrow="Versioned contracts" heading="Event catalog" copy="Publish standard JSON Schema contracts. Validation produces warnings without blocking delivery." /><section className="split-layout"><form className="content-card form-card" onSubmit={(event) => submit(event, "/api/event-types", (form) => ({ applicationId: form.get("applicationId"), name: form.get("name"), description: form.get("description"), schema: JSON.parse(String(form.get("schema"))), example: JSON.parse(String(form.get("example"))), compatibilityMode: form.get("compatibilityMode") }))}><h3>Publish event contract</h3><label>Application<select name="applicationId" required defaultValue=""><option value="" disabled>Select application</option>{data.applications.map((app)=><option key={app.id} value={app.id}>{app.name}</option>)}</select></label><label>Name<input name="name" required placeholder="invoice.payment_failed" /></label><label>Description<input name="description" placeholder="When this event is emitted" /></label><label>Compatibility<select name="compatibilityMode" defaultValue="backward"><option value="backward">Backward compatible</option><option value="none">No compatibility policy</option></select></label><label>JSON Schema<textarea className="code-input" name="schema" required defaultValue={defaultSchema}/></label><label>Example payload<textarea className="code-input small" name="example" required defaultValue={'{\n  "id": "evt_123"\n}'}/></label><button className="button primary" disabled={busy === "/api/event-types"}><Plus size={16} /> Publish version</button></form><section className="content-card list-card">{data.eventTypes.length ? <div className="resource-list">{data.eventTypes.map((item) => {const app=data.applications.find((value)=>value.id===item.application_id);return <article key={item.id}><span className="resource-icon"><Braces size={18} /></span><div><strong>{item.name} · v{item.current_version||1}</strong><small>{app?.name||"Workspace"} · {item.description||"No description"}{item.compatibility_warnings?.length?` · ${item.compatibility_warnings.length} compatibility warnings`:""}</small></div><span>{data.endpoints.filter((endpoint)=>endpoint.event_types.includes(item.name)).length} subscribers</span>{app?<a className="button secondary small" href={`/catalog/${app.uid}`} target="_blank">View docs</a>:null}</article>;})}</div> : <Empty icon={<Braces size={22} />} title="No event contracts" copy="Publish a contract to generate validation and application documentation." />}</section></section></>;
 }

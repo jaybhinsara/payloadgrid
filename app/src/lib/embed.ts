@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type EmbedPermission = "deliveries:read" | "deliveries:replay";
+export type EmbedPermission = "deliveries:read" | "deliveries:replay" | "endpoints:read" | "endpoints:write" | "subscriptions:write" | "secrets:rotate";
 export type EmbedClaims = { projectId: string; applicationId: string; permissions: EmbedPermission[]; exp: number };
 
 function secret() {

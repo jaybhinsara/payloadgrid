@@ -8,6 +8,7 @@ import { enforceInboundRateLimit, enforceMonthlyMessageLimit, UsageLimitError } 
 import { parseInboundBody } from "@/lib/inbound-content";
 import { verifyProviderWebhook } from "@/lib/provider-verification";
 import { queueConfigured } from "@/lib/queue";
+import { validateEventPayload } from "@/lib/event-contracts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const providerEventId = providerEventIdFromPayload(payload, provider, request.headers);
     const revenue = amountFromPayload(payload, provider);
     const headers = safeCapturedHeaders(request.headers);
+    const validation = await validateEventPayload(String(endpoint.project_id), endpoint.application_id ? String(endpoint.application_id) : null, eventType, payload);
     const circuit = await evaluateCircuitBreaker({
       id: String(endpoint.id), projectId: String(endpoint.project_id), name: String(endpoint.name),
       enabled: Boolean(endpoint.circuit_breaker_enabled), threshold: Number(endpoint.circuit_breaker_threshold), state: String(endpoint.circuit_state)
@@ -50,9 +52,9 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const [event] = await sql`
       with inserted_event as (
         insert into webhook_events (endpoint_id, application_id, direction, provider, provider_event_id, event_type,
-          request_headers, request_body, request_content_type, request_raw_body, status, revenue_amount, revenue_currency, max_retries)
+          request_headers, request_body, request_content_type, request_raw_body, status, revenue_amount, revenue_currency, max_retries, contract_version, validation_warnings)
         values (${endpoint.id}, ${endpoint.application_id}, 'inbound', ${provider}, ${providerEventId ? String(providerEventId) : null}, ${eventType},
-          ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, ${parsed.contentType}, ${parsed.rawBody}, ${initialStatus}, ${revenue.amount}, ${revenue.currency}, 6)
+          ${JSON.stringify(headers)}::jsonb, ${JSON.stringify(payload)}::jsonb, ${parsed.contentType}, ${parsed.rawBody}, ${initialStatus}, ${revenue.amount}, ${revenue.currency}, 6, ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb)
         on conflict (endpoint_id, provider_event_id) where provider_event_id is not null do nothing
         returning id, status
       ), inserted_job as (
@@ -65,7 +67,7 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     if (!event) return NextResponse.json({ ok: true, duplicate: true, status: "accepted" }, { status: 200 });
     if (circuit.open) return NextResponse.json({ ok: true, eventId: event.id, status: "buffered", circuitOpen: true }, { status: 202, headers: { "x-payloadgrid-event-id": String(event.id) } });
     if (event.dispatch_pending) after(() => dispatchOutboxBatch(1, String(event.id)));
-    return NextResponse.json({ ok: true, eventId: event.id, status: "accepted", verified: verification.verified, queueConfigured: queueConfigured() }, { status: 200, headers: { "x-payloadgrid-event-id": String(event.id) } });
+    return NextResponse.json({ ok: true, eventId: event.id, status: "accepted", verified: verification.verified, queueConfigured: queueConfigured(), contractVersion: validation.contractVersion, validationWarnings: validation.warnings }, { status: 200, headers: { "x-payloadgrid-event-id": String(event.id) } });
   } catch (error) {
     const status = error instanceof UsageLimitError ? error.status : 500;
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Webhook ingest failed" }, { status });

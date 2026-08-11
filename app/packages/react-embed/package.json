@@ -1,7 +1,7 @@
 {
   "name": "@payloadgrid/react",
-  "version": "0.1.0",
-  "description": "PayloadGrid embedded delivery portal component",
+  "version": "0.2.0",
+  "description": "Permission-scoped PayloadGrid delivery and endpoint management components",
   "keywords": ["payloadgrid", "webhooks", "react", "embed"],
   "type": "module",
   "main": "index.js",

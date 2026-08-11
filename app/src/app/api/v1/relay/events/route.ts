@@ -11,6 +11,9 @@ const querySchema = z.object({
   endpointId: z.string().uuid(),
   cursor: z.string().max(500).optional(),
   history: z.enum(["true", "false"]).default("false"),
+  eventType: z.string().trim().max(120).optional(),
+  direction: z.enum(["inbound", "outbound"]).optional(),
+  eventId: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25)
 });
 
@@ -37,23 +40,28 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, events: [], cursor: encodeCursor({ at: new Date().toISOString(), id: "00000000-0000-0000-0000-000000000000" }) });
     }
 
+    const filters: string[] = ["endpoint_id = $1"];
+    const filterParams: unknown[] = [input.endpointId];
+    if (input.eventType) { filterParams.push(input.eventType); filters.push(`event_type = $${filterParams.length}`); }
+    if (input.direction) { filterParams.push(input.direction); filters.push(`direction = $${filterParams.length}`); }
+    if (input.eventId) { filterParams.push(input.eventId); filters.push(`id = $${filterParams.length}::uuid`); }
     let rows: Record<string, unknown>[];
     if (input.cursor) {
       const cursor = decodeCursor(input.cursor);
       rows = await sql.query(`
         select id, event_type, direction, provider, request_headers, request_body, request_raw_body,
-          request_content_type, payload_redacted_at, received_at
+          request_content_type, payload_redacted_at, status, contract_version, validation_warnings, received_at
         from webhook_events
-        where endpoint_id = $1 and (received_at > $2::timestamptz or (received_at = $2::timestamptz and id > $3::uuid))
-        order by received_at asc, id asc limit $4
-      `, [input.endpointId, cursor.at, cursor.id, input.limit]) as Record<string, unknown>[];
+        where ${filters.join(" and ")} and (received_at > $${filterParams.length + 1}::timestamptz or (received_at = $${filterParams.length + 1}::timestamptz and id > $${filterParams.length + 2}::uuid))
+        order by received_at asc, id asc limit $${filterParams.length + 3}
+      `, [...filterParams, cursor.at, cursor.id, input.limit]) as Record<string, unknown>[];
     } else {
       const recent = await sql.query(`
         select id, event_type, direction, provider, request_headers, request_body, request_raw_body,
-          request_content_type, payload_redacted_at, received_at
-        from webhook_events where endpoint_id = $1
-        order by received_at desc, id desc limit $2
-      `, [input.endpointId, input.limit]) as Record<string, unknown>[];
+          request_content_type, payload_redacted_at, status, contract_version, validation_warnings, received_at
+        from webhook_events where ${filters.join(" and ")}
+        order by received_at desc, id desc limit $${filterParams.length + 1}
+      `, [...filterParams, input.limit]) as Record<string, unknown>[];
       rows = recent.reverse();
     }
 
@@ -67,6 +75,7 @@ export async function GET(request: Request) {
       body: row.payload_redacted_at ? null : row.request_raw_body ?? JSON.stringify(row.request_body),
       receivedAt: new Date(String(row.received_at)).toISOString(),
       redacted: Boolean(row.payload_redacted_at)
+      ,status: String(row.status), contractVersion: row.contract_version ? Number(row.contract_version) : null, validationWarnings: row.validation_warnings || []
     }));
     const last = events.at(-1);
     const cursor = last

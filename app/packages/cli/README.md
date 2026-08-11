@@ -12,7 +12,24 @@ Create a project API key with only the `events:read` permission. The key is stor
 
 Add `--history` to relay the latest retained events before listening for new ones. Add `--once` for a bounded test invocation.
 
+Tail and inspect retained traffic without forwarding it:
+
+```bash
+pg tail --endpoint ENDPOINT_UUID --event-type payment.captured --direction inbound --history
+pg inspect --endpoint ENDPOINT_UUID --event-id EVENT_UUID
+```
+
+Generate types from the latest published JSON Schema contracts:
+
+```bash
+pg types --application APPLICATION_UUID --language typescript --out events.ts
+pg types --application APPLICATION_UUID --language python --out events.py
+```
+
 ```text
 pg login --api-key pg_live_... [--api-url https://payloadgrid.com]
 pg listen --endpoint UUID --forward http://localhost:3000/webhooks [--history] [--once]
+pg tail --endpoint UUID [--event-type NAME] [--direction inbound|outbound] [--history]
+pg inspect --endpoint UUID --event-id UUID
+pg types --application UUID --language typescript|python [--out FILE]
 ```

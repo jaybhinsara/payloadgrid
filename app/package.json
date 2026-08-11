@@ -14,9 +14,11 @@
     "@neondatabase/serverless": "latest",
     "@upstash/qstash": "^2.11.3",
     "@vercel/analytics": "^2.0.1",
+    "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "jose": "^6.2.8",
     "lucide-react": "^1.28.0",
-    "next": "latest",
+    "next": "^16.3.0",
     "react": "latest",
     "react-dom": "latest",
     "zod": "latest"

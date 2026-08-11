@@ -1,32 +1,30 @@
-import { Activity, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, BellRing, Braces, Check, Clock3, Copy, Fingerprint, GitBranch, KeyRound, Layers3, RefreshCw, Route, ShieldCheck, Users } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, BellRing, Braces, Check, Copy, Database, Fingerprint, Layers3, RefreshCw, Route, ShieldCheck, Users } from "lucide-react";
 
 const capabilities = [
   { icon: Layers3, title: "Transactional intake", copy: "Commit each message, endpoint fan-out, and dispatch record together before returning 202." },
-  { icon: RefreshCw, title: "Automatic recovery", copy: "Increasing retry intervals, manual replay, and complete attempt history." },
-  { icon: Fingerprint, title: "Rotating signatures", copy: "Timestamped HMAC delivery with dual signatures during the 24-hour rotation window." },
-  { icon: GitBranch, title: "Event subscriptions", copy: "Send only the event types each destination has chosen to receive." },
-  { icon: Braces, title: "Schema mapping", copy: "Map nested fields visually and carry JSON, form, XML, or text bodies without format loss." },
+  { icon: Fingerprint, title: "Provider verification", copy: "Verify raw provider requests and sign outbound delivery with rotating secrets." },
+  { icon: Braces, title: "Visual schema mapping", copy: "Map nested fields and carry JSON, form, XML, or text bodies without format loss." },
   { icon: BellRing, title: "Traffic circuit breakers", copy: "Buffer anomalous spikes and notify operations before a destination is overwhelmed." },
-  { icon: Users, title: "Customer-native evidence", copy: "Embed a signed, permission-scoped delivery-history view inside your own product." },
-  { icon: KeyRound, title: "Scoped API access", copy: "Separate message publishing from relay reads with revocable project-level credentials." },
-  { icon: ShieldCheck, title: "Encrypted credentials", copy: "Protect provider secrets and destination authorization headers at rest." }
+  { icon: RefreshCw, title: "Recoverable delivery", copy: "Operate backoff, replay, dead letters, and complete attempt history from one lifecycle." },
+  { icon: Users, title: "Customer-native evidence", copy: "Embed a signed, permission-scoped delivery-history view inside your own product." }
 ];
 
 export function ProblemSection() {
-  return <section className="problem-section" id="why-payloadgrid">
-    <div className="problem-intro" data-reveal><span className="section-label">Why PayloadGrid</span><h2>A POST request is easy.<br />Operating it is not.</h2><p>The first webhook can ship in an afternoon. Production brings failing endpoints, duplicate events, signature rotation, support tickets, and a retry queue your team has to own forever.</p></div>
+  return <section className="problem-section operations-journey" id="why-payloadgrid">
+    <div className="problem-intro" data-reveal><span className="section-label">Operating model</span><h2>One event.<br />Five operational guarantees.</h2><p>A webhook should follow one visible path from acceptance to recovery. PayloadGrid keeps every stage durable, inspectable, and controlled from the same workspace.</p></div>
     <div className="problem-ledger" data-reveal>
-      <div><span>01</span><AlertTriangle size={18} /><strong>Customer endpoints fail</strong><p>Timeouts, expired certificates, deployments, and rate limits become your incident.</p></div>
-      <div><span>02</span><Clock3 size={18} /><strong>Retries become infrastructure</strong><p>Schedules, dead letters, idempotency, and replay need durable state and careful operations.</p></div>
-      <div><span>03</span><KeyRound size={18} /><strong>Security is easy to get wrong</strong><p>Unsigned payloads and replayable requests expose both your product and your customers.</p></div>
-      <div><span>04</span><Activity size={18} /><strong>Support needs evidence</strong><p>Without payloads, attempts, responses, and latency, every failure becomes guesswork.</p></div>
+      <div><span>01</span><Database size={18} /><strong>Accept</strong><p>Commit the message and delivery intent before acknowledging the request.</p></div>
+      <div><span>02</span><Route size={18} /><strong>Route</strong><p>Resolve the application, subscriptions, destinations, and payload policy.</p></div>
+      <div><span>03</span><ShieldCheck size={18} /><strong>Protect</strong><p>Verify providers, transform safely, and buffer traffic anomalies.</p></div>
+      <div><span>04</span><ArrowUpFromLine size={18} /><strong>Deliver</strong><p>Sign every request and retain its response, timing, and attempt evidence.</p></div>
+      <div><span>05</span><RefreshCw size={18} /><strong>Recover</strong><p>Retry with backoff, replay deliberately, or resolve the dead letter with history intact.</p></div>
     </div>
   </section>;
 }
 
 export function PlatformSection() {
   return <section className="unified-platform" id="platform">
-    <div className="platform-heading" data-reveal><span className="section-label">One control plane</span><h2>Inbound and outbound events,<br />finally in one system.</h2><p>PayloadGrid sits between the systems producing events and the endpoints consuming them. Your application keeps one simple integration while PayloadGrid operates the delivery lifecycle.</p></div>
+    <div className="platform-heading" data-reveal><span className="section-label">One control plane</span><h2>Two directions.<br />One delivery lifecycle.</h2><p>PayloadGrid sits between the systems producing events and the endpoints consuming them. Inbound callbacks and outbound customer events follow the same observable path without forcing your team to operate two vendors.</p></div>
     <div className="platform-mode outbound-mode" data-reveal>
       <div className="mode-copy"><span className="mode-index">01 / OUTBOUND</span><i><ArrowUpFromLine size={21} /></i><h3>Ship customer-facing webhooks without building a delivery platform.</h3><p>Call one authenticated API or submit a bounded batch. PayloadGrid commits fan-out intent before responding, then signs each request, records the response, and recovers failures.</p><ul><li><Check size={15} /> Scoped API-key authentication</li><li><Check size={15} /> Idempotent single and batch intake</li><li><Check size={15} /> Per-customer event subscriptions</li></ul></div>
       <div className="mode-visual outbound-visual"><div className="visual-toolbar"><span>MESSAGE ROUTER</span><em><i /> LIVE</em></div><div className="message-source"><code>order.completed</code><span>1 message</span></div><div className="fanout-line"><i /><i /><i /></div><div className="fanout-targets"><article><span>AC</span><div><strong>Acme API</strong><small>200 · 184ms</small></div><em>delivered</em></article><article><span>NO</span><div><strong>Northstar</strong><small>503 · retry in 5m</small></div><em className="retry">retrying</em></article><article><span>PL</span><div><strong>Pixel Labs</strong><small>200 · 312ms</small></div><em>delivered</em></article></div></div>

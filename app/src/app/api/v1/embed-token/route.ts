@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   applicationId: z.string().uuid(),
   expiresInMinutes: z.number().int().min(5).max(60).default(30),
-  permissions: z.array(z.enum(["deliveries:read", "deliveries:replay"])).min(1).max(2).default(["deliveries:read"])
+  permissions: z.array(z.enum(["deliveries:read", "deliveries:replay", "endpoints:read", "endpoints:write", "subscriptions:write", "secrets:rotate"])).min(1).max(6).default(["deliveries:read"])
 });
 
 export async function POST(request: Request) {

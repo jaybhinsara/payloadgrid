@@ -12,6 +12,13 @@ const querySchema = z.object({
   status: z.enum(statusValues).optional(),
   direction: z.enum(["inbound", "outbound"]).optional(),
   endpointId: z.string().uuid().optional(),
+  eventType: z.string().trim().max(120).optional(),
+  headerName: z.string().trim().regex(/^[a-zA-Z0-9-]{1,80}$/).optional(),
+  headerValue: z.string().trim().max(200).optional(),
+  payloadPath: z.string().trim().regex(/^[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+){0,9}$/).optional(),
+  payloadValue: z.string().trim().max(300).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
   cursor: z.string().max(500).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20)
 });
@@ -41,6 +48,18 @@ export async function GET(request: Request) {
     else if (input.status) add((index) => `e.status = $${index}`, input.status);
     if (input.direction) add((index) => `e.direction = $${index}`, input.direction);
     if (input.endpointId) add((index) => `e.endpoint_id = $${index}::uuid`, input.endpointId);
+    if (input.eventType) add((index) => `e.event_type = $${index}`, input.eventType);
+    if (input.headerName) {
+      add((index) => input.headerValue ? `coalesce(e.request_headers ->> lower($${index}), e.request_headers ->> $${index}) = $${index + 1}` : `e.request_headers ? lower($${index}) or e.request_headers ? $${index}`, input.headerName);
+      if (input.headerValue) params.push(input.headerValue);
+    }
+    if (input.payloadPath) {
+      const path = input.payloadPath.split(".");
+      add((index) => input.payloadValue ? `e.request_body #>> $${index}::text[] = $${index + 1}` : `e.request_body #> $${index}::text[] is not null`, path);
+      if (input.payloadValue) params.push(input.payloadValue);
+    }
+    if (input.from) add((index) => `e.received_at >= $${index}::timestamptz`, input.from);
+    if (input.to) add((index) => `e.received_at <= $${index}::timestamptz`, input.to);
     if (cursor) {
       params.push(cursor.receivedAt, cursor.id);
       clauses.push(`(e.received_at, e.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`);
@@ -50,7 +69,7 @@ export async function GET(request: Request) {
     const rows = await sql.query(`
       select e.id, e.endpoint_id, ep.name as endpoint_name, e.application_id, e.message_id, e.direction, e.provider,
         e.provider_event_id, e.event_type, case when e.status = 'dead_letter' and e.resolved_at is not null then 'resolved' else e.status end as status, e.revenue_at_risk, e.revenue_currency, e.received_at,
-        e.request_headers, e.request_body, e.retry_count, e.max_retries, e.next_retry_at, e.last_error,
+        e.request_headers, e.request_body, e.contract_version, e.validation_warnings, e.retry_count, e.max_retries, e.next_retry_at, e.last_error,
         e.cancelled_at, e.dead_lettered_at, e.resolved_at, e.resolution_note, resolver.name as resolved_by_name,
         coalesce(a.attempt_count, 0) as attempt_count,
         a.response_body, a.response_status, a.latency_ms, a.error

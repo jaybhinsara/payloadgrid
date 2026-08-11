@@ -6,6 +6,7 @@ import { DeveloperSection, FinalCta, LocalDevelopmentSection, ProductionSection,
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { SITE_URL } from "@/lib/site";
+import { hasSessionCookie } from "@/lib/auth";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -22,10 +23,11 @@ const structuredData = {
   ]
 };
 
-export default function Home() {
+export default async function Home() {
+  const signedIn = await hasSessionCookie();
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} /><main className="marketing-v2">
-    <MarketingMotion /><PublicHeader /><MarketingHero />
+    <MarketingMotion /><PublicHeader signedIn={signedIn} /><MarketingHero signedIn={signedIn} />
     <section className="proof-rail" aria-label="Supported webhook ecosystems"><span><Radio size={13} /> BUILT FOR</span><div><strong>SAAS PLATFORMS</strong><strong>PAYMENT APIS</strong><strong>COMMERCE</strong><strong>INTERNAL SYSTEMS</strong><strong>CUSTOM EVENTS</strong></div></section>
-    <ProblemSection /><PlatformSection /><ProductionSection /><UseCasesSection /><LocalDevelopmentSection /><SecuritySection /><DeveloperSection /><FinalCta /><PublicFooter />
+    <ProblemSection /><PlatformSection /><ProductionSection /><LocalDevelopmentSection /><SecuritySection /><UseCasesSection /><DeveloperSection /><FinalCta signedIn={signedIn} /><PublicFooter />
   </main></>;
 }
