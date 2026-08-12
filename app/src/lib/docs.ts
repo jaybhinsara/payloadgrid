@@ -113,7 +113,7 @@ export const DOC_ARTICLES: DocArticle[] = [
     summary: "Publish JSON Schema 2020-12 contracts, check compatibility, warn on invalid payloads, and generate application catalogs.",
     keywords: ["JSON Schema", "contract", "version", "compatibility", "catalog", "validation"],
     sections: [
-      { id: "publish", title: "Publish a contract version", paragraphs: ["Open Event types, select an application, name the event, and provide a standard JSON Schema plus an example payload. Publishing the same event name creates the next version."], code: [{ label: "JSON Schema 2020-12", language: "json", value: `{
+      { id: "publish", title: "Publish a contract version", paragraphs: ["Open Event types, select an application, name the event, and provide a standard JSON Schema plus an example payload. Use Manage versions on an existing contract to inspect history, preview compatibility, and publish its next immutable version. Examples must satisfy the schema before a version can be published."], code: [{ label: "JSON Schema 2020-12", language: "json", value: `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -122,7 +122,7 @@ export const DOC_ARTICLES: DocArticle[] = [
   },
   "required": ["orderId", "total"]
 }` }] },
-      { id: "compatibility", title: "Compatibility checks", paragraphs: ["Backward compatibility warnings identify removed fields, changed types, newly required fields, and stricter additional-property rules. Warnings help reviewers understand impact before consumers break."], note: { title: "Validation never blocks delivery", body: "Payloads that do not match the current contract are still delivered. PayloadGrid records the contract version and validation warnings as operational evidence." } },
+      { id: "compatibility", title: "Compatibility checks", paragraphs: ["Backward compatibility warnings identify removed accepted values, narrowed types and enums, newly required fields, stricter numeric or length constraints, changed formats, and stricter additional-property rules. Preview the next version before publishing; a warned version can still be published after explicit confirmation."], note: { title: "Validation never blocks delivery", body: "Payloads that do not match the current contract are still delivered. PayloadGrid records the contract version and validation warnings as operational evidence." } },
       { id: "catalog", title: "Generated event documentation", paragraphs: ["Every application has a hosted catalog at /catalog/APPLICATION_UID. It contains current schemas, examples, cURL, TypeScript and Python snippets, plus an authenticated signed test action."], bullets: ["Descriptions should explain when the event fires.", "Examples should resemble real payloads but contain no customer data.", "Publish contract updates in the same change as producer code."] }
     ]
   },

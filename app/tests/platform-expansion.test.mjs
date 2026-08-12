@@ -5,15 +5,22 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("event contracts are standard, versioned, application scoped, and non-blocking", async () => {
-  const [schema, contracts, outbound, inbound] = await Promise.all([read("../db/schema.sql"), read("../src/lib/event-contracts.ts"), read("../src/lib/outbound.ts"), read("../src/app/in/[endpointId]/route.ts")]);
+  const [schema, contracts, outbound, inbound, versionApi, dashboard, contractView] = await Promise.all([read("../db/schema.sql"), read("../src/lib/event-contracts.ts"), read("../src/lib/outbound.ts"), read("../src/app/in/[endpointId]/route.ts"), read("../src/app/api/event-types/[eventTypeId]/route.ts"), read("../src/app/api/dashboard/route.ts"), read("../src/components/dashboard/views/activity.tsx")]);
   assert.match(schema, /create table if not exists event_contract_versions/);
   assert.match(schema, /application_id uuid references applications/);
   assert.match(schema, /validation_warnings jsonb/);
   assert.match(contracts, /Ajv2020/);
   assert.match(contracts, /compatibilityWarnings/);
+  assert.match(contracts, /validatorCache/);
+  assert.match(contracts, /assertExampleMatchesSchema/);
+  assert.match(contracts, /enum value/);
   assert.match(outbound, /validateEventPayload/);
   assert.match(inbound, /validateEventPayload/);
   assert.doesNotMatch(outbound, /throw.*validationWarnings/);
+  assert.match(versionApi, /dryRun/);
+  assert.match(dashboard, /contract_version, validation_warnings/);
+  assert.match(contractView, /Manage versions/);
+  assert.match(contractView, /Check compatibility/);
 });
 
 test("delivery search and controlled replay remain project scoped", async () => {

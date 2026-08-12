@@ -10,8 +10,8 @@ export type DashboardData = {
   context: { user: { id: string; name: string; email: string }; organization: { id: string; name: string; slug: string; plan: string; role: string }; organizations: Array<{ id: string; name: string; role: string }>; project: { id: string; name: string; slug: string; environment: string; payloadRetentionMode: "standard" | "transient" }; projects: Array<{ id: string; name: string; slug: string; environment: string; payloadRetentionMode: "standard" | "transient" }> };
   providers: Array<{ id: string; name: string }>;
   applications: Application[]; endpoints: Endpoint[]; events: EventRow[];
-  messages: Array<{ id: string; application_id: string; event_type: string; status: string; created_at: string }>;
-  eventTypes: Array<{ id: string; application_id: string | null; name: string; description: string | null; schema: Record<string, unknown> | null; current_version: number | null; example: unknown; compatibility_warnings: string[]; created_at: string }>;
+  messages: Array<{ id: string; application_id: string; event_type: string; status: string; contract_version: number | null; validation_warnings: Array<{ path: string; keyword: string; message: string }>; created_at: string }>;
+  eventTypes: Array<{ id: string; application_id: string | null; name: string; description: string | null; schema: Record<string, unknown> | null; current_version: number | null; example: unknown; compatibility_mode: "backward" | "none" | null; compatibility_warnings: string[]; published_at: string | null; created_at: string }>;
   apiKeys: Array<{ id: string; name: string; key_prefix: string; scopes: string[]; last_used_at: string | null; revoked_at: string | null; created_at: string }>;
   members: Array<{ id: string; name: string; email: string; role: string; created_at: string }>;
   transformations: Array<{ id: string; name: string; event_type: string | null; config: { addFields?: Record<string, unknown>; removeFields?: string[]; renameFields?: Record<string, string>; mappings?: Array<{ from: string; to: string }> }; is_active: boolean }>;

@@ -26,7 +26,7 @@ export async function GET() {
       sql`
         select e.id, e.endpoint_id, ep.name as endpoint_name, e.application_id, e.message_id, e.direction, e.provider, e.provider_event_id,
           e.event_type, case when e.status = 'dead_letter' and e.resolved_at is not null then 'resolved' else e.status end as status, e.revenue_at_risk, e.revenue_currency, e.received_at, e.updated_at, e.request_headers, e.request_body,
-          e.request_content_type, e.is_simulation, e.parent_event_id,
+          e.request_content_type, e.is_simulation, e.parent_event_id, e.contract_version, e.validation_warnings,
           e.retry_count, e.max_retries, e.next_retry_at, e.last_error, e.cancelled_at, e.dead_lettered_at,
           e.resolved_at, e.resolution_note, resolver.name as resolved_by_name,
           coalesce(a.attempt_count, 0) as attempt_count, a.response_body, a.response_status, a.latency_ms, a.error
@@ -41,8 +41,8 @@ export async function GET() {
         where ep.project_id = ${context.project.id}
         order by e.received_at desc limit 100
       `,
-      sql`select id, application_id, event_type, status, created_at from messages where project_id = ${context.project.id} order by created_at desc limit 50`,
-      sql`select et.id, et.application_id, et.name, et.description, et.schema, et.created_at, current.version as current_version, current.example, current.compatibility_warnings from event_types et left join lateral (select version, example, compatibility_warnings from event_contract_versions where event_type_id=et.id and status='published' order by version desc limit 1) current on true where et.project_id = ${context.project.id} order by et.name asc`,
+      sql`select id, application_id, event_type, status, contract_version, validation_warnings, created_at from messages where project_id = ${context.project.id} order by created_at desc limit 50`,
+      sql`select et.id, et.application_id, et.name, et.description, et.schema, et.created_at, current.version as current_version, current.example, current.compatibility_mode, current.compatibility_warnings, current.published_at from event_types et left join lateral (select version, example, compatibility_mode, compatibility_warnings, published_at from event_contract_versions where event_type_id=et.id and status='published' order by version desc limit 1) current on true where et.project_id = ${context.project.id} order by et.name asc`,
       sql`select id, name, key_prefix, scopes, last_used_at, revoked_at, created_at from api_keys where project_id = ${context.project.id} order by created_at desc`,
       sql`select u.id, u.name, u.email, om.role, om.created_at from organization_members om join users u on u.id = om.user_id where om.organization_id = ${context.organization.id} order by om.created_at asc`,
       sql`select id, name, event_type, config, is_active, created_at from transformations where project_id = ${context.project.id} order by created_at desc`,

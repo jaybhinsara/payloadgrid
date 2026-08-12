@@ -84,7 +84,7 @@ export function DashboardClient() {
       {view === "endpoints" ? <EndpointsView data={data} busy={busy} submit={submit} copy={copy} mutate={mutate} /> : null}
       {view === "messages" ? <MessagesView data={data} busy={busy} submit={submit} /> : null}
       {view === "deliveries" ? <DeliveriesView initialEvents={data.events} endpoints={data.endpoints} inspect={setSelectedEvent} replay={replayDelivery} mutate={mutate} refreshVersion={lastRefresh?.getTime() || 0} /> : null}
-      {view === "event-types" ? <EventTypesView data={data} busy={busy} submit={submit} /> : null}
+      {view === "event-types" ? <EventTypesView data={data} busy={busy} submit={submit} mutate={mutate} /> : null}
       {view === "workspace" ? <WorkspaceView data={data} busy={busy} submit={submit} mutate={mutate} switchOrganization={switchOrganization} switchProject={switchProject} /> : null}
       {view === "operations" && ["owner", "admin"].includes(data.context.organization.role) ? <OperationsView refreshVersion={lastRefresh?.getTime() || 0} isOperator={data.system.operator} /> : null}
       {view === "blog" && data.system.operator ? <BlogView /> : null}

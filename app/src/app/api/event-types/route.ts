@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
-import { assertJsonSchema, compatibilityWarnings } from "@/lib/event-contracts";
+import { assertExampleMatchesSchema, assertJsonSchema, compatibilityWarnings, ContractDefinitionError } from "@/lib/event-contracts";
 import { requireSql } from "@/lib/db";
 
 const schema = z.object({
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     const body = schema.parse(await request.json());
     const contractSchema = body.schema || { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object" };
     assertJsonSchema(contractSchema);
+    assertExampleMatchesSchema(contractSchema, body.example);
     const sql = requireSql();
     if (body.applicationId) {
       const [application] = await sql`select 1 from applications where id = ${body.applicationId} and project_id = ${context.project.id}`;
@@ -46,6 +47,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, record: { ...record, currentVersion: version } }, { status: 201 });
   } catch (error) {
     const result = authErrorResponse(error);
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : result.message }, { status: error instanceof z.ZodError ? 400 : result.status });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : result.message }, { status: error instanceof z.ZodError || error instanceof ContractDefinitionError ? 400 : result.status });
   }
 }
