@@ -47,7 +47,7 @@ export async function processDelivery(eventId: string): Promise<DeliveryProcessR
       and (next_retry_at is null or next_retry_at <= now())
       and (locked_at is null or locked_at < now() - interval '5 minutes')
     returning id, endpoint_id, message_id, direction, event_type, request_body, request_raw_body, request_content_type,
-      max_retries, revenue_amount, revenue_at_risk
+      max_retries, revenue_amount, revenue_at_risk, is_simulation
   `;
   if (!claimed) return { processed: false, reason: "Event is already processing, completed, or not due" };
   const [endpoint] = await sql`
@@ -111,7 +111,7 @@ export async function processDelivery(eventId: string): Promise<DeliveryProcessR
     `;
   }
   if (claimed.message_id) await updateMessageStatus(String(claimed.message_id));
-  if (!delivery.ok) await notifyFailure({ projectId: String(endpoint.project_id), eventId: String(claimed.id), eventType: String(claimed.event_type), error: delivery.error || `Destination HTTP ${delivery.status}` });
+  if (!delivery.ok && !claimed.is_simulation) await notifyFailure({ projectId: String(endpoint.project_id), eventId: String(claimed.id), eventType: String(claimed.event_type), error: delivery.error || `Destination HTTP ${delivery.status}` });
   let retryScheduled = false;
   if (willRetry) {
     try {

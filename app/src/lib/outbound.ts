@@ -11,6 +11,7 @@ export type AcceptMessageInput = {
   eventType: string;
   payload: unknown;
   idempotencyKey?: string | null;
+  isSimulation?: boolean;
 };
 
 function readPath(value: Record<string, unknown>, path: string) {
@@ -68,11 +69,11 @@ export async function acceptMessage(input: AcceptMessageInput) {
     ), inserted_events as (
       insert into webhook_events (
         endpoint_id, application_id, message_id, direction, provider, provider_event_id,
-        event_type, request_body, status, max_retries, contract_version, validation_warnings
+        event_type, request_body, status, max_retries, contract_version, validation_warnings, is_simulation
       )
       select ep.id, ${input.applicationId}, am.id, 'outbound', 'payloadgrid', am.id::text,
         ${input.eventType}, ${JSON.stringify(payload)}::jsonb,
-        case when ep.circuit_state = 'open' then 'buffered' else 'queued' end, 6, ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb
+        case when ep.circuit_state = 'open' then 'buffered' else 'queued' end, 6, ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb, ${Boolean(input.isSimulation)}
       from accepted_message am
       join endpoints ep on ep.project_id = ${input.projectId} and ep.application_id = ${input.applicationId}
         and ep.is_active = true and ep.deleted_at is null

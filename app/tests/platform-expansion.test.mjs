@@ -39,8 +39,20 @@ test("delivery search and controlled replay remain project scoped", async () => 
 });
 
 test("catalog, embedded management, and CLI use scoped APIs", async () => {
-  const [catalog, embed, token, cli] = await Promise.all([read("../src/app/catalog/[applicationUid]/page.tsx"), read("../src/app/api/embed/endpoints/route.ts"), read("../src/lib/embed.ts"), read("../packages/cli/bin/payloadgrid.mjs")]);
-  assert.match(catalog, /JSON Schema 2020-12/);
+  const [catalog, catalogWorkspace, catalogButton, catalogTest, outbound, worker, embed, token, cli] = await Promise.all([read("../src/app/catalog/[applicationUid]/page.tsx"), read("../src/components/catalog-workspace.tsx"), read("../src/components/catalog-test-button.tsx"), read("../src/app/api/catalog/test/route.ts"), read("../src/lib/outbound.ts"), read("../src/lib/delivery-worker.ts"), read("../src/app/api/embed/endpoints/route.ts"), read("../src/lib/embed.ts"), read("../packages/cli/bin/payloadgrid.mjs")]);
+  assert.match(catalog, /event_contract_versions/);
+  assert.match(catalogWorkspace, /Search event contracts/);
+  assert.match(catalogWorkspace, /Contract version/);
+  assert.match(catalogWorkspace, /Download schema/);
+  assert.match(catalogWorkspace, /Version change/);
+  assert.match(catalogButton, /Edit and test/);
+  assert.match(catalogWorkspace, /payloadgrid\.send/);
+  assert.match(catalogWorkspace, /client\.send/);
+  assert.doesNotMatch(catalogWorkspace, /messages\.send|send_message/);
+  assert.match(catalogTest, /requireRole/);
+  assert.match(catalogTest, /isSimulation: true/);
+  assert.match(outbound, /is_simulation/);
+  assert.match(worker, /!claimed\.is_simulation/);
   assert.match(embed, /value\.applicationId/);
   assert.match(embed, /subscriptions:write/);
   assert.match(embed, /secrets:rotate/);

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Brand } from "@/components/brand";
-import { CatalogTestButton } from "@/components/catalog-test-button";
+import { CatalogWorkspace, type CatalogContract } from "@/components/catalog-workspace";
 import { requireSql } from "@/lib/db";
 import { SITE_URL } from "@/lib/site";
 
@@ -13,14 +12,25 @@ export default async function EventCatalog({ params }: { params: Promise<{ appli
   const sql = requireSql();
   const [application] = await sql`select id, name, uid, description, project_id from applications where uid=${applicationUid} limit 1`;
   if (!application) notFound();
-  const contracts = await sql`
-    select et.id, et.name, et.description, ec.version, ec.schema, ec.example
-    from event_types et join lateral (select version, schema, example from event_contract_versions where event_type_id=et.id and status='published' order by version desc limit 1) ec on true
-    where et.project_id=${application.project_id} and (et.application_id=${application.id} or et.application_id is null) order by et.name
+  const rows = await sql`
+    select et.id, et.name, et.description, ec.version, ec.schema, ec.example, ec.compatibility_mode,
+      ec.compatibility_warnings, ec.status, ec.published_at, ec.created_at
+    from event_types et
+    join event_contract_versions ec on ec.event_type_id=et.id and ec.status in ('published','deprecated')
+    where et.project_id=${application.project_id} and (et.application_id=${application.id} or et.application_id is null)
+    order by et.name, ec.version desc
   `;
-  return <main className="catalog-shell"><header className="catalog-nav"><Brand /><span>Generated event catalog</span></header><section className="catalog-hero"><span>APPLICATION CONTRACTS</span><h1>{String(application.name)}</h1><p>{String(application.description || "Versioned webhook events, payload schemas, and integration examples.")}</p><code>{String(application.uid)}</code></section><div className="catalog-layout"><aside><strong>Events</strong>{contracts.map((contract) => <a key={String(contract.id)} href={`#${String(contract.name)}`}>{String(contract.name)} <small>v{Number(contract.version)}</small></a>)}</aside><section className="catalog-events">{contracts.length ? contracts.map((contract) => {
-    const example = contract.example ?? {};
-    const body = JSON.stringify({ applicationId: application.id, eventType: contract.name, payload: example }, null, 2);
-    return <article id={String(contract.name)} key={String(contract.id)}><header><div><span>EVENT CONTRACT · V{Number(contract.version)}</span><h2>{String(contract.name)}</h2><p>{String(contract.description || "No description provided.")}</p></div><CatalogTestButton applicationId={String(application.id)} eventType={String(contract.name)} payload={example} /></header><h3>Example payload</h3><pre>{JSON.stringify(example, null, 2)}</pre><h3>JSON Schema 2020-12</h3><details><summary>View schema</summary><pre>{JSON.stringify(contract.schema, null, 2)}</pre></details><h3>Send with cURL</h3><pre>{`curl -X POST ${SITE_URL}/api/v1/messages \\\n  -H "Authorization: Bearer $PAYLOADGRID_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '${body.replaceAll("'", "'\\''")}'`}</pre><div className="catalog-snippets"><div><h3>TypeScript</h3><pre>{`await payloadgrid.messages.send({\n  applicationId: "${application.id}",\n  eventType: "${contract.name}",\n  payload\n});`}</pre></div><div><h3>Python</h3><pre>{`client.send_message(\n    application_id="${application.id}",\n    event_type="${contract.name}",\n    payload=payload,\n)`}</pre></div></div></article>;
-  }) : <div className="catalog-empty"><h2>No published contracts</h2><p>Publish an event contract from the PayloadGrid dashboard.</p></div>}</section></div></main>;
+  const contracts = new Map<string, CatalogContract>();
+  for (const row of rows) {
+    const id = String(row.id);
+    const existing = contracts.get(id) || { id, name: String(row.name), description: row.description ? String(row.description) : null, versions: [] };
+    existing.versions.push({
+      version: Number(row.version), schema: row.schema as Record<string, unknown>, example: row.example,
+      compatibilityMode: String(row.compatibility_mode) as "backward" | "none",
+      compatibilityWarnings: Array.isArray(row.compatibility_warnings) ? row.compatibility_warnings.map(String) : [],
+      status: String(row.status), publishedAt: row.published_at ? String(row.published_at) : String(row.created_at)
+    });
+    contracts.set(id, existing);
+  }
+  return <CatalogWorkspace application={{ id: String(application.id), name: String(application.name), uid: String(application.uid), description: application.description ? String(application.description) : null }} contracts={[...contracts.values()]} siteUrl={SITE_URL} />;
 }
