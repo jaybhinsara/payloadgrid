@@ -35,7 +35,7 @@ export function ProductionSection() {
       <header><span>DISPATCH PIPELINE</span><em><i /> RECOVERABLE</em></header>
       <div className="pipeline-step"><span>01</span><Database size={19} /><div><strong>Commit once</strong><small>Message + fan-out + outbox</small></div><code>TRANSACTION</code></div>
       <i className="pipeline-link" />
-      <div className="pipeline-step"><span>02</span><Network size={19} /><div><strong>Dispatch asynchronously</strong><small>Signed queue publication</small></div><code>QSTASH</code></div>
+      <div className="pipeline-step"><span>02</span><Network size={19} /><div><strong>Dispatch asynchronously</strong><small>Signed queue publication</small></div><code>QUEUE</code></div>
       <i className="pipeline-link" />
       <div className="pipeline-step"><span>03</span><ShieldCheck size={19} /><div><strong>Claim atomically</strong><small>One active attempt per delivery</small></div><code>WORKER</code></div>
       <footer><Check size={15} /><span>Scheduled recovery republishes missing or stale dispatch jobs.</span></footer>

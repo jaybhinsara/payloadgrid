@@ -9,7 +9,7 @@ const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 export async function POST(request: Request) {
   try {
     const context = await requireSession(); requirePlatformOperator(context);
-    if (!process.env.BLOB_READ_WRITE_TOKEN) return NextResponse.json({ ok: false, error: "Vercel Blob is not configured" }, { status: 503 });
+    if (!process.env.BLOB_READ_WRITE_TOKEN) return NextResponse.json({ ok: false, error: "Media storage is not configured" }, { status: 503 });
     const form = await request.formData(); const file = form.get("file");
     if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "Choose an image to upload" }, { status: 400 });
     if (!allowed.has(file.type)) return NextResponse.json({ ok: false, error: "Use a JPEG, PNG, WebP, or GIF image" }, { status: 400 });

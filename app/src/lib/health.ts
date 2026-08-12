@@ -33,7 +33,10 @@ async function readQueueMetrics(projectId?: string) {
   if (projectId) {
     const [row] = await sql`
       select count(*) filter (where e.status in ('queued','processing','retrying','received'))::int as pending,
-        coalesce(extract(epoch from (now() - (min(e.received_at) filter (where e.status in ('queued','processing','retrying','received'))))), 0)::int as oldest_pending_seconds,
+        coalesce(extract(epoch from (now() - min(case
+          when e.status in ('queued','processing','received') then e.updated_at
+          when e.status = 'retrying' and coalesce(e.next_retry_at, e.updated_at) <= now() then coalesce(e.next_retry_at, e.updated_at)
+        end))), 0)::int as oldest_pending_seconds,
         max(e.updated_at) filter (where e.status in ('delivered','failed','dead_letter','cancelled')) as last_delivery_at
       from webhook_events e join endpoints ep on ep.id = e.endpoint_id
       where ep.project_id = ${projectId}
@@ -42,7 +45,10 @@ async function readQueueMetrics(projectId?: string) {
   }
   const [row] = await sql`
     select count(*) filter (where status in ('queued','processing','retrying','received'))::int as pending,
-      coalesce(extract(epoch from (now() - (min(received_at) filter (where status in ('queued','processing','retrying','received'))))), 0)::int as oldest_pending_seconds,
+      coalesce(extract(epoch from (now() - min(case
+        when status in ('queued','processing','received') then updated_at
+        when status = 'retrying' and coalesce(next_retry_at, updated_at) <= now() then coalesce(next_retry_at, updated_at)
+      end))), 0)::int as oldest_pending_seconds,
       max(updated_at) filter (where status in ('delivered','failed','dead_letter','cancelled')) as last_delivery_at
     from webhook_events
   `;
@@ -56,7 +62,10 @@ async function readOutboxMetrics(projectId?: string) {
       select count(*) filter (where j.status = 'pending')::int as pending,
         count(*) filter (where j.status = 'publishing')::int as publishing,
         count(*) filter (where j.last_error is not null and j.updated_at >= now() - interval '1 hour')::int as errors,
-        coalesce(extract(epoch from (now() - min(j.created_at) filter (where j.status <> 'published'))), 0)::int as oldest_seconds
+        coalesce(extract(epoch from (now() - min(case
+          when j.status = 'pending' and j.available_at <= now() then j.available_at
+          when j.status = 'publishing' then coalesce(j.locked_at, j.updated_at)
+        end))), 0)::int as oldest_seconds
       from dispatch_jobs j
       join webhook_events e on e.id = j.event_id
       join endpoints ep on ep.id = e.endpoint_id
@@ -68,7 +77,10 @@ async function readOutboxMetrics(projectId?: string) {
     select count(*) filter (where status = 'pending')::int as pending,
       count(*) filter (where status = 'publishing')::int as publishing,
       count(*) filter (where last_error is not null and updated_at >= now() - interval '1 hour')::int as errors,
-      coalesce(extract(epoch from (now() - min(created_at) filter (where status <> 'published'))), 0)::int as oldest_seconds
+      coalesce(extract(epoch from (now() - min(case
+        when status = 'pending' and available_at <= now() then available_at
+        when status = 'publishing' then coalesce(locked_at, updated_at)
+      end))), 0)::int as oldest_seconds
     from dispatch_jobs
   `;
   return row;
