@@ -25,7 +25,8 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const [endpoint] = await sql`
       select id, project_id, application_id, provider, destination_url, is_active, provider_secret_encrypted,
         provider_verification_required, rate_limit_per_minute, circuit_breaker_enabled,
-        circuit_breaker_threshold, circuit_state, name
+        circuit_breaker_threshold, circuit_state, name, revenue_tracking_mode, revenue_amount_path,
+        revenue_currency_path, revenue_fixed_currency, revenue_amount_unit
       from endpoints where id = ${endpointId} and deleted_at is null limit 1
     `;
     if (!endpoint?.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive PayloadGrid endpoint" }, { status: 404 });
@@ -40,7 +41,13 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     const payload = parsed.payload;
     const eventType = eventTypeFromPayload(payload, provider, request.headers);
     const providerEventId = providerEventIdFromPayload(payload, provider, request.headers);
-    const revenue = amountFromPayload(payload, provider);
+    const revenue = amountFromPayload(payload, provider, {
+      mode: String(endpoint.revenue_tracking_mode) as "disabled" | "automatic" | "custom",
+      amountPath: endpoint.revenue_amount_path ? String(endpoint.revenue_amount_path) : null,
+      currencyPath: endpoint.revenue_currency_path ? String(endpoint.revenue_currency_path) : null,
+      fixedCurrency: endpoint.revenue_fixed_currency ? String(endpoint.revenue_fixed_currency) : null,
+      amountUnit: String(endpoint.revenue_amount_unit) as "major" | "minor"
+    });
     const headers = safeCapturedHeaders(request.headers);
     const validation = await validateEventPayload(String(endpoint.project_id), endpoint.application_id ? String(endpoint.application_id) : null, eventType, payload);
     const circuit = await evaluateCircuitBreaker({

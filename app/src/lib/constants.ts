@@ -1,7 +1,15 @@
 import { SITE_URL } from "@/lib/site";
+import { normalizeCurrencyCode } from "@/lib/currency";
 
 export type Provider = "razorpay" | "stripe" | "cashfree" | "shopify" | "custom";
 export type WebhookStatus = "queued" | "processing" | "received" | "delivered" | "failed" | "retrying";
+export type RevenueConfiguration = {
+  mode: "disabled" | "automatic" | "custom";
+  amountPath?: string | null;
+  currencyPath?: string | null;
+  fixedCurrency?: string | null;
+  amountUnit?: "major" | "minor";
+};
 
 export const providers = [
   { id: "razorpay", name: "Razorpay", category: "Payments", color: "#2563eb" },
@@ -49,6 +57,11 @@ function numericValue(source: unknown, paths: string[][]) {
   return 0;
 }
 
+function currencyAtPath(payload: unknown, path?: string | null) {
+  if (!path) return null;
+  return normalizeCurrencyCode(readNestedValue(payload, path.split(".").map((part) => part.trim()).filter(Boolean)));
+}
+
 function normalizedCurrency(payload: unknown, provider: Provider) {
   const paths = provider === "razorpay"
     ? [["payload", "payment", "entity", "currency"], ["payload", "order", "entity", "currency"]]
@@ -61,7 +74,8 @@ function normalizedCurrency(payload: unknown, provider: Provider) {
           : [["currency"], ["data", "currency"]];
   for (const path of paths) {
     const value = readNestedValue(payload, path);
-    if (typeof value === "string" && /^[a-z]{3}$/i.test(value)) return value.toUpperCase();
+    const currency = normalizeCurrencyCode(value);
+    if (currency) return currency;
   }
   return null;
 }
@@ -75,8 +89,16 @@ function minorToMajor(amount: number, currency: string) {
   }
 }
 
-export function amountFromPayload(payload: unknown, provider: Provider) {
-  const currency = normalizedCurrency(payload, provider);
+export function amountFromPayload(payload: unknown, provider: Provider, configuration: RevenueConfiguration = { mode: "automatic" }) {
+  if (configuration.mode === "disabled") return { amount: 0, currency: null };
+  const fixedCurrency = normalizeCurrencyCode(configuration.fixedCurrency);
+  if (configuration.mode === "custom") {
+    const currency = currencyAtPath(payload, configuration.currencyPath) || fixedCurrency;
+    if (!currency || !configuration.amountPath) return { amount: 0, currency: null };
+    const amount = numericValue(payload, [configuration.amountPath.split(".").map((part) => part.trim()).filter(Boolean)]);
+    return { amount: configuration.amountUnit === "minor" ? minorToMajor(amount, currency) : amount, currency };
+  }
+  const currency = normalizedCurrency(payload, provider) || fixedCurrency;
   if (!currency) return { amount: 0, currency: null };
   if (provider === "razorpay") {
     const minor = numericValue(payload, [["payload", "payment", "entity", "amount"], ["payload", "order", "entity", "amount"]]);

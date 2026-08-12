@@ -157,6 +157,11 @@ create table if not exists endpoints (
   circuit_breaker_threshold integer not null default 100,
   circuit_state text not null default 'closed' check (circuit_state in ('closed', 'open')),
   circuit_opened_at timestamptz,
+  revenue_tracking_mode text not null default 'disabled' check (revenue_tracking_mode in ('disabled', 'automatic', 'custom')),
+  revenue_amount_path text,
+  revenue_currency_path text,
+  revenue_fixed_currency text,
+  revenue_amount_unit text not null default 'major' check (revenue_amount_unit in ('major', 'minor')),
   is_active boolean not null default true,
   deleted_at timestamptz,
   created_at timestamptz not null default now(),
@@ -177,6 +182,17 @@ alter table endpoints add column if not exists circuit_breaker_enabled boolean n
 alter table endpoints add column if not exists circuit_breaker_threshold integer not null default 100;
 alter table endpoints add column if not exists circuit_state text not null default 'closed';
 alter table endpoints add column if not exists circuit_opened_at timestamptz;
+alter table endpoints add column if not exists revenue_tracking_mode text not null default 'disabled';
+alter table endpoints add column if not exists revenue_amount_path text;
+alter table endpoints add column if not exists revenue_currency_path text;
+alter table endpoints add column if not exists revenue_fixed_currency text;
+alter table endpoints add column if not exists revenue_amount_unit text not null default 'major';
+alter table endpoints drop constraint if exists endpoints_revenue_tracking_mode_check;
+alter table endpoints add constraint endpoints_revenue_tracking_mode_check check (revenue_tracking_mode in ('disabled', 'automatic', 'custom'));
+alter table endpoints drop constraint if exists endpoints_revenue_amount_unit_check;
+alter table endpoints add constraint endpoints_revenue_amount_unit_check check (revenue_amount_unit in ('major', 'minor'));
+alter table endpoints drop constraint if exists endpoints_revenue_fixed_currency_check;
+alter table endpoints add constraint endpoints_revenue_fixed_currency_check check (revenue_fixed_currency is null or revenue_fixed_currency ~ '^[A-Z]{3}$');
 alter table endpoints drop constraint if exists endpoints_circuit_state_check;
 alter table endpoints add constraint endpoints_circuit_state_check check (circuit_state in ('closed', 'open'));
 

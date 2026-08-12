@@ -15,7 +15,14 @@ const schema = z.object({
   destinationUrl: z.string().url().max(500), eventTypes: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
   providerSecret: z.string().trim().max(500).optional(),
   deliveryHeaders: z.record(z.string(), z.string()).default({}),
-  circuitBreakerEnabled: z.boolean().default(false), circuitBreakerThreshold: z.number().int().min(20).max(100000).default(100)
+  circuitBreakerEnabled: z.boolean().default(false), circuitBreakerThreshold: z.number().int().min(20).max(100000).default(100),
+  revenueTrackingMode: z.enum(["disabled", "automatic", "custom"]).default("disabled"),
+  revenueAmountPath: z.string().trim().max(240).optional(), revenueCurrencyPath: z.string().trim().max(240).optional(),
+  revenueFixedCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+  revenueAmountUnit: z.enum(["major", "minor"]).default("major")
+}).superRefine((value, context) => {
+  if (value.revenueTrackingMode === "custom" && !value.revenueAmountPath) context.addIssue({ code: "custom", path: ["revenueAmountPath"], message: "Amount path is required for custom revenue tracking" });
+  if (value.revenueTrackingMode === "custom" && !value.revenueCurrencyPath && !value.revenueFixedCurrency) context.addIssue({ code: "custom", path: ["revenueFixedCurrency"], message: "Choose a fixed currency or provide a currency path" });
 });
 
 export async function POST(request: Request) {
@@ -35,16 +42,19 @@ export async function POST(request: Request) {
     const [endpoint] = await sql`
       insert into endpoints (project_id, application_id, name, provider, destination_url, signing_secret, provider_secret_encrypted,
         provider_verification_required, provider_secret_hint, delivery_headers_encrypted, delivery_header_names,
-        circuit_breaker_enabled, circuit_breaker_threshold)
+        circuit_breaker_enabled, circuit_breaker_threshold, revenue_tracking_mode, revenue_amount_path,
+        revenue_currency_path, revenue_fixed_currency, revenue_amount_unit)
       values (${context.project.id}, ${body.applicationId}, ${body.name}, ${body.provider}, ${destinationUrl}, ${`whsec_${randomToken(24)}`},
         ${encryptedProviderSecret}, ${body.provider !== "custom"}, ${body.providerSecret ? `••••${body.providerSecret.slice(-4)}` : null},
         ${encryptedDeliveryHeaders}, ${Object.keys(deliveryHeaders)},
-        ${body.circuitBreakerEnabled}, ${body.circuitBreakerThreshold})
+        ${body.circuitBreakerEnabled}, ${body.circuitBreakerThreshold}, ${body.revenueTrackingMode},
+        ${body.revenueAmountPath || null}, ${body.revenueCurrencyPath || null}, ${body.revenueFixedCurrency || null}, ${body.revenueAmountUnit})
       returning id, application_id, name, provider, destination_url, signing_secret, provider_verification_required,
-        provider_secret_hint, delivery_header_names, is_active, circuit_breaker_enabled, circuit_breaker_threshold, circuit_state, created_at
+        provider_secret_hint, delivery_header_names, is_active, circuit_breaker_enabled, circuit_breaker_threshold, circuit_state,
+        revenue_tracking_mode, revenue_amount_path, revenue_currency_path, revenue_fixed_currency, revenue_amount_unit, created_at
     `;
     for (const eventType of [...new Set(body.eventTypes)]) await sql`insert into endpoint_subscriptions (endpoint_id, event_type) values (${endpoint.id}, ${eventType}) on conflict do nothing`;
-    await writeAudit(context.organization.id, context.user.id, "endpoint.created", "endpoint", String(endpoint.id), { applicationId: body.applicationId, provider: body.provider, providerVerification: body.provider !== "custom" });
+    await writeAudit(context.organization.id, context.user.id, "endpoint.created", "endpoint", String(endpoint.id), { applicationId: body.applicationId, provider: body.provider, providerVerification: body.provider !== "custom", revenueTrackingMode: body.revenueTrackingMode });
     return NextResponse.json({ ok: true, endpoint }, { status: 201 });
   } catch (error) {
     if (error instanceof UsageLimitError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });

@@ -1284,6 +1284,11 @@ p { color: var(--muted); line-height: 1.6; }
 .contract-history article > div { display: grid; gap: 3px; }
 .contract-history article strong { font-size: 11px; }
 .contract-history article small { color: var(--muted); font-size: 9px; }
+.revenue-configuration { display: grid; gap: 13px; margin: 3px 0; border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.revenue-configuration legend { display: flex; align-items: center; gap: 7px; padding: 0 7px; color: var(--ink); font-size: 12px; font-weight: 800; }
+.revenue-configuration legend small { color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.revenue-configuration > label { display: grid; gap: 7px; color: #40464d; font-size: 11px; font-weight: 750; }
+.revenue-configuration label small, .revenue-configuration > p { margin: 0; color: var(--muted); font-size: 9px; font-weight: 500; line-height: 1.5; }
 @media (max-width: 900px) { .contract-layout { grid-template-columns: 1fr; } }
 @media (max-width: 560px) {
   .contract-list > article { grid-template-columns: 39px minmax(0, 1fr); }

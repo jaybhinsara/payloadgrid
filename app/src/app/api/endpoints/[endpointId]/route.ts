@@ -21,8 +21,16 @@ const updateSchema = z.object({
   deliveryHeaders: z.record(z.string(), z.string()).optional(),
   circuitBreakerEnabled: z.boolean().optional(),
   circuitBreakerThreshold: z.number().int().min(20).max(100000).optional(),
-  circuitState: z.enum(["closed", "open"]).optional()
-}).refine((value) => Object.values(value).some((item) => item !== undefined), "No endpoint changes supplied");
+  circuitState: z.enum(["closed", "open"]).optional(),
+  revenueTrackingMode: z.enum(["disabled", "automatic", "custom"]).optional(),
+  revenueAmountPath: z.string().trim().max(240).nullable().optional(),
+  revenueCurrencyPath: z.string().trim().max(240).nullable().optional(),
+  revenueFixedCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).nullable().optional(),
+  revenueAmountUnit: z.enum(["major", "minor"]).optional()
+}).refine((value) => Object.values(value).some((item) => item !== undefined), "No endpoint changes supplied").superRefine((value, context) => {
+  if (value.revenueTrackingMode === "custom" && !value.revenueAmountPath) context.addIssue({ code: "custom", path: ["revenueAmountPath"], message: "Amount path is required for custom revenue tracking" });
+  if (value.revenueTrackingMode === "custom" && !value.revenueCurrencyPath && !value.revenueFixedCurrency) context.addIssue({ code: "custom", path: ["revenueFixedCurrency"], message: "Choose a fixed currency or provide a currency path" });
+});
 
 type RouteContext = { params: Promise<{ endpointId: string }> };
 
@@ -62,6 +70,11 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
         circuit_breaker_threshold = coalesce(${body.circuitBreakerThreshold ?? null}, circuit_breaker_threshold),
         circuit_state = coalesce(${body.circuitState ?? null}, circuit_state),
         circuit_opened_at = case when ${body.circuitState === "closed"} then null when ${body.circuitState === "open"} then now() else circuit_opened_at end,
+        revenue_tracking_mode = coalesce(${body.revenueTrackingMode ?? null}, revenue_tracking_mode),
+        revenue_amount_path = case when ${body.revenueAmountPath !== undefined} then ${body.revenueAmountPath || null} else revenue_amount_path end,
+        revenue_currency_path = case when ${body.revenueCurrencyPath !== undefined} then ${body.revenueCurrencyPath || null} else revenue_currency_path end,
+        revenue_fixed_currency = case when ${body.revenueFixedCurrency !== undefined} then ${body.revenueFixedCurrency || null} else revenue_fixed_currency end,
+        revenue_amount_unit = coalesce(${body.revenueAmountUnit ?? null}, revenue_amount_unit),
         updated_at = now()
       where id = ${endpointId}
     `;
@@ -94,7 +107,8 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
     const [endpoint] = await sql`
       select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, ep.signing_secret,
         ep.provider_verification_required, ep.provider_secret_hint, ep.delivery_header_names, ep.is_active, ep.circuit_breaker_enabled,
-        ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.created_at,
+        ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.revenue_tracking_mode,
+        ep.revenue_amount_path, ep.revenue_currency_path, ep.revenue_fixed_currency, ep.revenue_amount_unit, ep.created_at,
         coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
       from endpoints ep where ep.id = ${endpointId}
     `;

@@ -49,3 +49,16 @@ test("catalog, embedded management, and CLI use scoped APIs", async () => {
   assert.match(cli, /command === "inspect"/);
   assert.match(cli, /command === "types"/);
 });
+
+test("revenue tracking is optional, endpoint scoped, and currency explicit", async () => {
+  const [schema, inbound, constants, endpointApi, dashboard, routing] = await Promise.all([read("../db/schema.sql"), read("../src/app/in/[endpointId]/route.ts"), read("../src/lib/constants.ts"), read("../src/app/api/endpoints/route.ts"), read("../src/app/api/dashboard/route.ts"), read("../src/components/dashboard/views/routing.tsx")]);
+  assert.match(schema, /revenue_tracking_mode text not null default 'disabled'/);
+  assert.match(schema, /revenue_amount_unit in \('major', 'minor'\)/);
+  assert.match(endpointApi, /revenueTrackingMode.*disabled/);
+  assert.match(inbound, /revenue_tracking_mode/);
+  assert.match(constants, /configuration\.mode === "disabled"/);
+  assert.match(constants, /configuration\.amountUnit === "minor"/);
+  assert.match(dashboard, /revenueTrackingEnabled/);
+  assert.match(routing, /currencySymbol/);
+  assert.match(routing, /Disabled · no payment data required/);
+});

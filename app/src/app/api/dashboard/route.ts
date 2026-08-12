@@ -20,6 +20,7 @@ export async function GET() {
       sql`
         select ep.id, ep.application_id, ep.name, ep.provider, ep.destination_url, case when ${context.organization.role === "viewer"} then null else ep.signing_secret end as signing_secret, ep.provider_verification_required, ep.provider_secret_hint, ep.is_active,
           ep.delivery_header_names, ep.circuit_breaker_enabled, ep.circuit_breaker_threshold, ep.circuit_state, ep.circuit_opened_at, ep.created_at,
+          ep.revenue_tracking_mode, ep.revenue_amount_path, ep.revenue_currency_path, ep.revenue_fixed_currency, ep.revenue_amount_unit,
           coalesce((select array_agg(s.event_type order by s.event_type) from endpoint_subscriptions s where s.endpoint_id = ep.id), '{}') as event_types
         from endpoints ep where ep.project_id = ${context.project.id} and ep.deleted_at is null order by ep.created_at desc
       `,
@@ -97,7 +98,7 @@ export async function GET() {
         deadLetteredEvents: Number(metric?.dead_lettered_events || 0), oldestPendingAt: metric?.oldest_pending_at || null,
         openIncidents: Number(metric?.failed_events || 0) + Number(metric?.retrying_events || 0),
         successRate: terminal ? Math.round((delivered / terminal) * 1000) / 10 : 100,
-        avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: metric?.revenue_at_risk || [], endpoints: endpoints.length
+        avgLatency: Math.round(Number(metric?.avg_latency || 0)), revenueAtRisk: metric?.revenue_at_risk || [], revenueTrackingEnabled: endpoints.some((endpoint) => endpoint.revenue_tracking_mode !== "disabled"), endpoints: endpoints.length
       }
     });
   } catch (error) {
