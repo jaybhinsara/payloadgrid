@@ -17,8 +17,8 @@ const schema = z.object({
   deliveryHeaders: z.record(z.string(), z.string()).default({}),
   circuitBreakerEnabled: z.boolean().default(false), circuitBreakerThreshold: z.number().int().min(20).max(100000).default(100),
   revenueTrackingMode: z.enum(["disabled", "automatic", "custom"]).default("disabled"),
-  revenueAmountPath: z.string().trim().max(240).optional(), revenueCurrencyPath: z.string().trim().max(240).optional(),
-  revenueFixedCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+  revenueAmountPath: z.string().trim().max(240).nullable().optional(), revenueCurrencyPath: z.string().trim().max(240).nullable().optional(),
+  revenueFixedCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).nullable().optional(),
   revenueAmountUnit: z.enum(["major", "minor"]).default("major")
 }).superRefine((value, context) => {
   if (value.revenueTrackingMode === "custom" && !value.revenueAmountPath) context.addIssue({ code: "custom", path: ["revenueAmountPath"], message: "Amount path is required for custom revenue tracking" });
