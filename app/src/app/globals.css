@@ -12,6 +12,14 @@ button, input, select, textarea { font: inherit; }
 button { border: 0; cursor: pointer; }
 input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); outline: none; }
 input, select { min-height: 42px; padding: 0 12px; }
+select {
+  appearance: none;
+  padding-right: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23687078' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+}
 textarea { min-height: 92px; resize: vertical; padding: 11px 12px; }
 input:focus, select:focus, textarea:focus { border-color: #9fa7a0; box-shadow: 0 0 0 3px rgba(23,25,30,.06); }
 h1, h2, h3, p { margin-top: 0; }
