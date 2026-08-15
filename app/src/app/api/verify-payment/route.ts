@@ -35,8 +35,8 @@ export async function POST(request: Request) {
     const order = await razorpay.orders.fetch(body.razorpay_order_id);
     const planId = String(order.notes?.plan || "") as PlanId;
     const plan = getPlan(planId);
-    const expectedAmount = Math.round(Number(plan.monthlyPriceUsd) * 100);
-    const expectedCurrency = (process.env.RAZORPAY_CHECKOUT_CURRENCY || "USD").trim().toUpperCase();
+    const expectedAmount = Math.round(Number(plan.monthlyPriceInr) * 100);
+    const expectedCurrency = (process.env.RAZORPAY_CHECKOUT_CURRENCY || "INR").trim().toUpperCase();
     if (
       (planId !== "starter" && planId !== "growth") ||
       String(order.notes?.organization_id) !== context.organization.id ||

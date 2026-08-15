@@ -12,9 +12,9 @@ test("commercial plans are centralized and enforced by organization plan", async
     read("../src/app/pricing/page.tsx"),
     read("../db/schema.sql")
   ]);
-  assert.match(plans, /monthlyPriceUsd: 29/);
+  assert.match(plans, /monthlyPriceInr: 2499/);
   assert.match(plans, /messagesPerMonth: 100_000/);
-  assert.match(plans, /monthlyPriceUsd: 149/);
+  assert.match(plans, /monthlyPriceInr: 12499/);
   assert.match(plans, /messagesPerMonth: 1_000_000/);
   assert.match(limits, /planLimits\(String\(account\?\.plan \|\| "free"\)\)/);
   assert.match(limits, /p\.organization_id=\$\{account\?\.organization_id\}/);

@@ -14,12 +14,12 @@ export async function POST(request: Request) {
     requireRole(context, ["owner", "admin"]);
     const { plan: planId } = requestSchema.parse(await request.json());
     const plan = getPlan(planId);
-    const amount = Math.round(Number(plan.monthlyPriceUsd) * 100);
+    const amount = Math.round(Number(plan.monthlyPriceInr) * 100);
     if (!Number.isSafeInteger(amount) || amount < 100) {
       return NextResponse.json({ ok: false, error: "Order amount must be at least 100 currency subunits" }, { status: 400 });
     }
 
-    const currency = (process.env.RAZORPAY_CHECKOUT_CURRENCY || "USD").trim().toUpperCase();
+    const currency = (process.env.RAZORPAY_CHECKOUT_CURRENCY || "INR").trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) {
       return NextResponse.json({ ok: false, error: "Razorpay checkout currency is invalid" }, { status: 500 });
     }
