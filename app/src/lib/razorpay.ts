@@ -1,9 +1,21 @@
 import Razorpay from "razorpay";
 
+export class RazorpayConfigurationError extends Error {}
+
 export function getRazorpayConfig() {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keyId || !keySecret) throw new Error("Razorpay is not configured");
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  const publicKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim();
+  if (!keyId || !keySecret) throw new RazorpayConfigurationError("Razorpay server credentials are missing");
+  if (!/^rzp_(test|live)_[A-Za-z0-9]+$/.test(keyId)) {
+    throw new RazorpayConfigurationError("RAZORPAY_KEY_ID must contain only the key value, beginning with rzp_test_ or rzp_live_");
+  }
+  if (!/^\S{16,}$/.test(keySecret)) {
+    throw new RazorpayConfigurationError("RAZORPAY_KEY_SECRET contains whitespace or is incomplete");
+  }
+  if (publicKeyId && publicKeyId !== keyId) {
+    throw new RazorpayConfigurationError("NEXT_PUBLIC_RAZORPAY_KEY_ID does not match the server RAZORPAY_KEY_ID");
+  }
   return { keyId, keySecret };
 }
 
@@ -17,4 +29,21 @@ export function razorpayErrorStatus(error: unknown) {
   const description = candidate?.error?.description || (error instanceof Error ? error.message : "");
   if (candidate?.statusCode === 401 || candidate?.status === 401 || /authenticat|key[_ -]?(id|secret)/i.test(description)) return 401;
   return 500;
+}
+
+export function razorpayErrorDetails(error: unknown) {
+  const candidate = error as {
+    statusCode?: number;
+    status?: number;
+    error?: { code?: string; description?: string; source?: string; step?: string; reason?: string; field?: string };
+  };
+  return {
+    status: candidate?.statusCode || candidate?.status || null,
+    code: candidate?.error?.code || null,
+    description: candidate?.error?.description || (error instanceof Error ? error.message : "Unknown Razorpay error"),
+    source: candidate?.error?.source || null,
+    step: candidate?.error?.step || null,
+    reason: candidate?.error?.reason || null,
+    field: candidate?.error?.field || null
+  };
 }
