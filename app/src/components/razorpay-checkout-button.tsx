@@ -16,8 +16,8 @@ declare global {
 }
 
 async function responseBody(response: Response) {
-  const data = await response.json().catch(() => ({})) as { error?: string };
-  if (!response.ok) throw Object.assign(new Error(data.error || "Payment request failed"), { status: response.status });
+  const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+  if (!response.ok) throw Object.assign(new Error(data.error || "Payment request failed"), { status: response.status, code: data.code });
   return data;
 }
 
@@ -76,8 +76,8 @@ export function RazorpayCheckoutButton({ plan, planName }: { plan: Extract<PlanI
       });
       checkout.open();
     } catch (error) {
-      const status = (error as Error & { status?: number }).status;
-      if (status === 401) window.location.assign(`/login?next=${encodeURIComponent("/pricing")}`);
+      const code = (error as Error & { code?: string }).code;
+      if (code === "AUTH_REQUIRED") window.location.assign(`/login?next=${encodeURIComponent("/pricing")}`);
       else setMessage(error instanceof Error ? error.message : "Unable to start checkout.");
       setBusy(false);
     }

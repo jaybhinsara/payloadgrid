@@ -103,8 +103,8 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: "Payment verification fields are missing or invalid" }, { status: 400 });
     const auth = authErrorResponse(error);
-    if (auth.status !== 500) return NextResponse.json({ ok: false, error: auth.message }, { status: auth.status });
+    if (auth.status !== 500) return NextResponse.json({ ok: false, error: auth.message, code: auth.status === 401 ? "AUTH_REQUIRED" : "AUTH_FORBIDDEN" }, { status: auth.status });
     const status = razorpayErrorStatus(error);
-    return NextResponse.json({ ok: false, error: status === 401 ? "Razorpay authentication failed" : "Unable to verify the payment" }, { status });
+    return NextResponse.json({ ok: false, error: status === 401 ? "Razorpay authentication failed. Check the server key ID and secret." : "Unable to verify the payment", code: status === 401 ? "RAZORPAY_AUTH_FAILED" : "RAZORPAY_VERIFY_FAILED" }, { status });
   }
 }

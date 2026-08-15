@@ -25,6 +25,8 @@ test("Razorpay checkout keeps pricing and verification on the server", async () 
   assert.match(checkout, /checkout\.razorpay\.com\/v1\/checkout\.js/);
   assert.match(checkout, /payment\.failed/);
   assert.match(checkout, /ondismiss/);
+  assert.match(checkout, /code === "AUTH_REQUIRED"/);
+  assert.doesNotMatch(checkout, /status === 401/);
   assert.doesNotMatch(checkout, /RAZORPAY_KEY_SECRET/);
   assert.match(env, /NEXT_PUBLIC_RAZORPAY_KEY_ID=/);
   assert.match(gitignore, /^\.env$/m);
