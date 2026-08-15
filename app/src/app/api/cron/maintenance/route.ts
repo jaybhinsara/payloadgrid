@@ -34,7 +34,18 @@ export async function GET(request: Request) {
     await sql`update endpoints set previous_signing_secret = null, previous_signing_secret_expires_at = null where previous_signing_secret_expires_at <= now()`;
     await sql`delete from sessions where expires_at <= now()`;
     await sql`delete from oauth_states where expires_at <= now()`;
-    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0) });
+    const expiredPlans = await sql`
+      with expired_subscriptions as (
+        update billing_subscriptions set status = 'expired', updated_at = now()
+        where provider = 'razorpay' and status = 'active' and current_period_end <= now()
+        returning organization_id, plan
+      )
+      update organizations o set plan = 'free', updated_at = now()
+      from expired_subscriptions s
+      where o.id = s.organization_id and o.plan = s.plan
+      returning o.id
+    `;
+    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0), expiredPlans: expiredPlans.length });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Maintenance failed" }, { status: 500 });
   }

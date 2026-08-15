@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { authErrorResponse, requireSession } from "@/lib/auth";
 import { appUrl, providers } from "@/lib/constants";
 import { requireSql } from "@/lib/db";
-import { PLAN_LIMITS } from "@/lib/limits";
+import { planLimits } from "@/lib/limits";
+import { getPlan } from "@/lib/plans";
 import { queueConfigured } from "@/lib/queue";
 import { isPlatformOperator } from "@/lib/operator";
 
@@ -15,6 +16,7 @@ export async function GET() {
   try {
     const context = await requireSession();
     const sql = requireSql();
+    const plan = getPlan(context.organization.plan);
     const [applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, metricRows, usageRows] = await Promise.all([
       sql`select id, name, uid, description, created_at from applications where project_id = ${context.project.id} order by created_at desc`,
       sql`
@@ -85,14 +87,14 @@ export async function GET() {
       `,
       sql`
         select date_trunc('month', now()) as period_start,
-          ((select count(*) from messages where project_id = ${context.project.id} and created_at >= date_trunc('month', now())) +
-           (select count(*) from webhook_events e join endpoints ep on ep.id = e.endpoint_id where ep.project_id = ${context.project.id} and e.direction = 'inbound' and e.is_simulation = false and e.received_at >= date_trunc('month', now())))::int as accepted_events
+          ((select count(*) from messages m join projects p on p.id=m.project_id where p.organization_id=${context.organization.id} and m.created_at >= date_trunc('month', now())) +
+           (select count(*) from webhook_events e join endpoints ep on ep.id=e.endpoint_id join projects p on p.id=ep.project_id where p.organization_id=${context.organization.id} and e.direction='inbound' and e.is_simulation=false and e.received_at >= date_trunc('month', now())))::int as accepted_events
       `
     ]);
     const metric = metricRows[0] as MetricRow | undefined;
     const total = Number(metric?.total_events || 0); const terminal = Number(metric?.terminal_events || 0); const delivered = Number(metric?.delivered_events || 0);
     return NextResponse.json({
-      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, system: { queueConfigured: queueConfigured(), operator: isPlatformOperator(context.user.email) }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: PLAN_LIMITS },
+      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, system: { queueConfigured: queueConfigured(), operator: isPlatformOperator(context.user.email) }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: planLimits(plan.id), plan: { id: plan.id, name: plan.name, monthlyPriceUsd: plan.monthlyPriceUsd } },
       metrics: {
         totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0), queuedEvents: Number(metric?.queued_events || 0), processingEvents: Number(metric?.processing_events || 0),
         deadLetteredEvents: Number(metric?.dead_lettered_events || 0), oldestPendingAt: metric?.oldest_pending_at || null,

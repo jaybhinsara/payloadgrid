@@ -64,6 +64,35 @@ create table if not exists organizations (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists billing_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null unique references organizations(id) on delete cascade,
+  provider text not null check (provider in ('lemon_squeezy', 'paddle', 'razorpay', 'manual')),
+  provider_customer_id text,
+  provider_subscription_id text unique,
+  plan text not null check (plan in ('starter', 'growth', 'enterprise')),
+  status text not null check (status in ('trialing', 'active', 'past_due', 'paused', 'cancelled', 'expired')),
+  current_period_start timestamptz,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists billing_webhook_events (
+  provider text not null,
+  provider_event_id text not null,
+  event_type text not null,
+  processed_at timestamptz not null default now(),
+  primary key (provider, provider_event_id)
+);
+
+create index if not exists billing_subscriptions_status_idx on billing_subscriptions(status, current_period_end);
+
+alter table billing_subscriptions drop constraint if exists billing_subscriptions_provider_check;
+alter table billing_subscriptions add constraint billing_subscriptions_provider_check
+  check (provider in ('lemon_squeezy', 'paddle', 'razorpay', 'manual'));
+
 create table if not exists organization_members (
   organization_id uuid not null references organizations(id) on delete cascade,
   user_id uuid not null references users(id) on delete cascade,

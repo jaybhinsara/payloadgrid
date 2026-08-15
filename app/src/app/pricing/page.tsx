@@ -1,15 +1,25 @@
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
-import { PLAN_LIMITS } from "@/lib/limits";
+import { RazorpayCheckoutButton } from "@/components/razorpay-checkout-button";
+import { PLAN_CATALOG, type PlanId } from "@/lib/plans";
 import { publicMetadata } from "@/lib/seo";
 
-export const metadata = publicMetadata({ title: "Webhook Infrastructure Pricing", description: "Start free with PayloadGrid webhook infrastructure, automatic retries, replay, signatures, and delivery logs. Review limits and higher-volume options.", path: "/pricing" });
+export const metadata = publicMetadata({ title: "Webhook Infrastructure Pricing", description: "PayloadGrid pricing for reliable inbound and outbound webhooks, retries, replay, signatures, analytics, and delivery evidence.", path: "/pricing" });
+
+const order: PlanId[] = ["free", "starter", "growth", "enterprise"];
 
 export default function PricingPage() {
-  return <PublicPage eyebrow="Simple pricing" title="Start free. Scale with your traffic." intro="Use the Free plan for development and production workloads within the included limits. No credit card is required.">
-    <section className="pricing-plan"><div><span>FREE</span><h2>$0</h2><p>per month</p><Link className="button primary large" href="/signup">Create a workspace <ArrowRight size={17} /></Link></div><ul><li><Check size={17} /> {PLAN_LIMITS.messagesPerMonth.toLocaleString()} events per project / month</li><li><Check size={17} /> {PLAN_LIMITS.endpoints} endpoints per project</li><li><Check size={17} /> {PLAN_LIMITS.teamMembers} team members</li><li><Check size={17} /> {PLAN_LIMITS.payloadRetentionDays}-day payload retention</li><li><Check size={17} /> Automatic retries and manual replay</li><li><Check size={17} /> Provider signature verification</li><li><Check size={17} /> Delivery logs and audit history</li></ul></section>
-    <section className="public-section"><span className="section-label">Custom capacity</span><h2>Plan around your real workload.</h2><p>For higher event volume, throughput, retention, or support requirements, contact PayloadGrid with your architecture and expected traffic. Capacity and service commitments are agreed explicitly before limits change.</p><Link className="text-link" href="/contact">Discuss capacity <ArrowRight size={15} /></Link></section>
-    <section className="public-faq"><h2>Plan questions</h2><details><summary>Can I use the Free plan in production?</summary><p>Yes, within the published limits. For business-critical systems, keep an independent recovery path and review the current service status and terms. A contractual SLA applies only when agreed in writing.</p></details><details><summary>Are retries counted again?</summary><p>No. Usage counts accepted source events, not individual retry attempts.</p></details><details><summary>Can limits be increased?</summary><p>Contact us with the expected provider, monthly volume, throughput, and retention needs. We will review capacity before raising a limit.</p></details></section>
+  return <PublicPage eyebrow="Simple, bounded pricing" title="Start free. Pay when traffic grows." intro="Every plan includes the complete delivery path. Higher tiers increase accepted events, throughput, retention, endpoints, and team capacity without charging again for retry attempts.">
+    <section className="pricing-grid">
+      {order.map((id) => { const plan = PLAN_CATALOG[id]; return <article className={id === "starter" ? "featured" : ""} key={id}>
+        <header><span>{id === "starter" ? "RECOMMENDED" : plan.name.toUpperCase()}</span><h2>{plan.monthlyPriceUsd === null ? "Custom" : `$${plan.monthlyPriceUsd}`}</h2><p>{plan.monthlyPriceUsd === null ? "capacity agreement" : "per workspace / month"}</p></header>
+        <p>{plan.description}</p>
+        <ul><li><Check size={16} /> {plan.limits.messagesPerMonth.toLocaleString()} accepted events / month</li><li><Check size={16} /> {plan.limits.endpoints.toLocaleString()} endpoints / project</li><li><Check size={16} /> {plan.limits.teamMembers.toLocaleString()} team members</li><li><Check size={16} /> {plan.limits.payloadRetentionDays}-day payload retention</li>{plan.features.map((feature) => <li key={feature}><Check size={16} /> {feature}</li>)}</ul>
+        {id === "starter" || id === "growth" ? <RazorpayCheckoutButton plan={id} planName={plan.name} /> : <Link className="button secondary" href={id === "enterprise" ? `/contact?plan=${id}` : "/signup"}>{id === "enterprise" ? "Contact sales" : "Start free"} <ArrowRight size={16} /></Link>}
+      </article>; })}
+    </section>
+    <section className="public-section"><span className="section-label">Commercial guardrails</span><h2>Predictable capacity without unlimited-usage surprises.</h2><p>Accepted inbound and outbound source events count toward monthly usage. Retries, filtered events with no matching destination, simulations, and delivery attempts do not create additional accepted-event charges. Standard Checkout purchases one month of Starter or Growth capacity and does not renew automatically.</p></section>
+    <section className="public-faq"><h2>Plan questions</h2><details><summary>Can I use the Free plan in production?</summary><p>Yes, within its published limits. Maintain an independent recovery path for critical operations. A contractual SLA applies only when agreed in writing.</p></details><details><summary>What happens at a limit?</summary><p>PayloadGrid rejects new accepted events with a clear limit response rather than silently creating overage charges. Contact support before a planned traffic increase.</p></details><details><summary>Are taxes included?</summary><p>Displayed prices exclude taxes unless checkout states otherwise. The merchant shown at checkout calculates applicable sales tax, VAT, GST, or similar charges based on the transaction and billing location.</p></details><details><summary>Does checkout renew automatically?</summary><p>No. Razorpay Standard Checkout activates one monthly period. Purchase the next period manually before the current period ends, or contact sales for a written recurring arrangement.</p></details></section>
   </PublicPage>;
 }

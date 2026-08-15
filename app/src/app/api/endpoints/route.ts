@@ -5,7 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { assertSafeDestinationUrl } from "@/lib/destination-security";
 import { normalizeDeliveryHeaders } from "@/lib/destination-adapters";
 import { requireSql } from "@/lib/db";
-import { PLAN_LIMITS, UsageLimitError } from "@/lib/limits";
+import { planLimits, UsageLimitError } from "@/lib/limits";
 import { encryptSecret, randomToken } from "@/lib/security";
 
 export const runtime = "nodejs";
@@ -32,8 +32,9 @@ export async function POST(request: Request) {
     if (body.provider !== "custom" && !body.providerSecret) return NextResponse.json({ ok: false, error: `${body.provider} verification secret is required` }, { status: 400 });
     const destinationUrl = await assertSafeDestinationUrl(body.destinationUrl);
     const sql = requireSql();
+    const limits = planLimits(context.organization.plan);
     const [count] = await sql`select count(*)::int as count from endpoints where project_id = ${context.project.id} and deleted_at is null`;
-    if (Number(count.count) >= PLAN_LIMITS.endpoints) throw new UsageLimitError(`Current plan supports up to ${PLAN_LIMITS.endpoints} endpoints per project`);
+    if (Number(count.count) >= limits.endpoints) throw new UsageLimitError(`Current plan supports up to ${limits.endpoints} endpoints per project`);
     const [application] = await sql`select id from applications where id = ${body.applicationId} and project_id = ${context.project.id} limit 1`;
     if (!application) return NextResponse.json({ ok: false, error: "Application not found" }, { status: 404 });
     const encryptedProviderSecret = body.providerSecret ? encryptSecret(body.providerSecret) : null;
