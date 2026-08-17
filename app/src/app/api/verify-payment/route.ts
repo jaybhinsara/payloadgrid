@@ -5,6 +5,7 @@ import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { requireSql } from "@/lib/db";
 import { getPlan, type PlanId } from "@/lib/plans";
+import { paymentsEnabled } from "@/lib/payments";
 import { getRazorpayClient, getRazorpayConfig, RazorpayConfigurationError, razorpayErrorDetails, razorpayErrorStatus } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
@@ -21,6 +22,9 @@ function signaturesMatch(orderId: string, paymentId: string, signature: string, 
 }
 
 export async function POST(request: Request) {
+  if (!paymentsEnabled()) {
+    return NextResponse.json({ ok: false, error: "Paid checkout is temporarily unavailable", code: "PAYMENTS_DISABLED" }, { status: 503 });
+  }
   try {
     const context = await requireSession();
     requireRole(context, ["owner", "admin"]);

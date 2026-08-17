@@ -5,11 +5,15 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("commercial plans are centralized and enforced by organization plan", async () => {
-  const [plans, limits, dashboard, pricing, schema] = await Promise.all([
+  const [plans, limits, dashboard, pricing, payments, createOrder, verifyPayment, env, schema] = await Promise.all([
     read("../src/lib/plans.ts"),
     read("../src/lib/limits.ts"),
     read("../src/app/api/dashboard/route.ts"),
     read("../src/app/pricing/page.tsx"),
+    read("../src/lib/payments.ts"),
+    read("../src/app/api/create-order/route.ts"),
+    read("../src/app/api/verify-payment/route.ts"),
+    read("../.env.example"),
     read("../db/schema.sql")
   ]);
   assert.match(plans, /monthlyPriceInr: 2499/);
@@ -20,6 +24,11 @@ test("commercial plans are centralized and enforced by organization plan", async
   assert.match(limits, /p\.organization_id=\$\{account\?\.organization_id\}/);
   assert.match(dashboard, /planLimits\(plan\.id\)/);
   assert.match(pricing, /RazorpayCheckoutButton/);
+  assert.match(pricing, /Payments temporarily unavailable/);
+  assert.match(payments, /PAYMENTS_ENABLED/);
+  assert.match(createOrder, /PAYMENTS_DISABLED/);
+  assert.match(verifyPayment, /PAYMENTS_DISABLED/);
+  assert.match(env, /PAYMENTS_ENABLED=false/);
   assert.match(pricing, /does not renew automatically/);
   assert.match(schema, /create table if not exists billing_subscriptions/);
   assert.match(schema, /provider_event_id text not null/);

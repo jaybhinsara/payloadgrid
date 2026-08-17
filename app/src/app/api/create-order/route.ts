@@ -3,12 +3,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { getPlan } from "@/lib/plans";
+import { paymentsEnabled } from "@/lib/payments";
 import { getRazorpayClient, RazorpayConfigurationError, razorpayErrorDetails, razorpayErrorStatus } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
 const requestSchema = z.object({ plan: z.enum(["starter", "growth"]) });
 
 export async function POST(request: Request) {
+  if (!paymentsEnabled()) {
+    return NextResponse.json({ ok: false, error: "Paid checkout is temporarily unavailable", code: "PAYMENTS_DISABLED" }, { status: 503 });
+  }
   try {
     const context = await requireSession();
     requireRole(context, ["owner", "admin"]);
