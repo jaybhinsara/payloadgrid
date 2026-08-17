@@ -5,7 +5,7 @@ import { requireSql } from "@/lib/db";
 import { planLimits } from "@/lib/limits";
 import { getPlan } from "@/lib/plans";
 import { queueConfigured } from "@/lib/queue";
-import { isPlatformOperator } from "@/lib/operator";
+import { isPlatformAdmin } from "@/lib/operator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,7 +104,7 @@ export async function GET() {
     const activationRow = activationRows[0] || {};
     const activationFlags = [Boolean(activationRow.application_created), Boolean(activationRow.endpoint_created), Boolean(activationRow.api_key_created), Boolean(activationRow.delivery_succeeded)];
     return NextResponse.json({
-      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, system: { queueConfigured: queueConfigured(), operator: isPlatformOperator(context.user.email) }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: planLimits(plan.id), plan: { id: plan.id, name: plan.name, monthlyPriceInr: plan.monthlyPriceInr } },
+      ok: true, appUrl: appUrl(), providers, context, applications, endpoints, events, messages, eventTypes, apiKeys, members, transformations, alerts, alertNotifications, auditLogs, system: { queueConfigured: queueConfigured(), admin: isPlatformAdmin(context.user.email) }, usage: { periodStart: usageRows[0]?.period_start, acceptedEvents: Number(usageRows[0]?.accepted_events || 0), limits: planLimits(plan.id), plan: { id: plan.id, name: plan.name, monthlyPriceInr: plan.monthlyPriceInr } },
       activation: { applicationCreated: activationFlags[0], endpointCreated: activationFlags[1], apiKeyCreated: activationFlags[2], eventAccepted: Boolean(activationRow.event_accepted), deliverySucceeded: activationFlags[3], completed: activationFlags.every(Boolean), completedSteps: activationFlags.filter(Boolean).length, totalSteps: activationFlags.length },
       metrics: {
         totalEvents: total, deliveredEvents: delivered, failedEvents: Number(metric?.failed_events || 0), retryingEvents: Number(metric?.retrying_events || 0), queuedEvents: Number(metric?.queued_events || 0), processingEvents: Number(metric?.processing_events || 0),

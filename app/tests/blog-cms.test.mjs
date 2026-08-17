@@ -67,13 +67,13 @@ test("markdown rendering does not enable raw HTML", async () => {
   for (const action of ["Heading 2", "Bold", "Italic", "Underline", "Link", "Bulleted list", "Numbered list", "Quote", "Code", "Divider"]) assert.match(toolbar, new RegExp(action));
 });
 
-test("dashboard publishing UI is hidden from customer workspace admins", async () => {
+test("publishing UI lives only in the separate platform admin", async () => {
   const [dashboard, editor] = await Promise.all([
     read("src/components/dashboard/dashboard-client.tsx"),
     read("src/components/dashboard/views/blog.tsx")
   ]);
-  assert.match(dashboard, /item\.id !== "blog" \|\| data\.system\.operator/);
-  assert.match(dashboard, /view === "blog" && data\.system\.operator/);
+  assert.match(dashboard, /data\.system\.admin \? <a className="sidebar-admin" href="\/admin"/);
+  assert.doesNotMatch(dashboard, /view === "blog"|<BlogView/);
   assert.doesNotMatch(editor, /Revision history|recent snapshots|Restore/);
   assert.match(editor, /SEO metadata/);
   assert.match(editor, /Upload image/);

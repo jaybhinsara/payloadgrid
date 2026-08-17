@@ -58,7 +58,7 @@ Set the Vercel Root Directory to `app`. Add these Production and Preview variabl
 - `NEXT_PUBLIC_SUPPORT_EMAIL`: public support address
 - `PAYLOADGRID_ENCRYPTION_KEY`: stable 32-byte base64 or 64-character hex key
 - `CRON_SECRET`: independent random secret for protected maintenance and monitoring routes
-- `PAYLOADGRID_OPERATOR_EMAILS`: comma-separated accounts allowed to manage platform incidents
+- `PAYLOADGRID_ADMIN_EMAILS`: comma-separated accounts allowed to access PayloadGrid Admin, publish articles, and manage platform incidents
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob token used only for operator blog cover-image uploads
 
 Run `app/db/schema.sql` in Neon before deploying code that uses the new columns.

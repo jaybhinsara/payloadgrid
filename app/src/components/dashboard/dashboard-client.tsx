@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AlertTriangle, AppWindow, ArchiveX, Ban, BarChart3, Beaker, CircleCheck, BookOpen, Building2, Braces, ChevronDown, Copy, FileText, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, ServerCog, Settings2, Users, X } from "lucide-react";
+import { Activity, AlertTriangle, AppWindow, ArchiveX, Ban, BarChart3, Beaker, CircleCheck, BookOpen, Building2, Braces, ChevronDown, Copy, Gauge, KeyRound, LoaderCircle, LogOut, Menu, MessageSquareText, RefreshCw, RotateCcw, Route, ServerCog, Settings2, ShieldCheck, Users, X } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Status } from "@/components/dashboard/common";
 import { OnboardingWizard } from "@/components/dashboard/onboarding";
@@ -14,13 +14,12 @@ import { ApiKeysView, AutomationsView, TeamView } from "@/components/dashboard/v
 import { UsageView } from "@/components/dashboard/views/usage";
 import { WorkspaceView } from "@/components/dashboard/views/workspace";
 import { OperationsView } from "@/components/dashboard/views/operations";
-import { BlogView } from "@/components/dashboard/views/blog";
 import { AnalyticsView } from "@/components/dashboard/views/analytics";
 
 const nav: Array<{ id: View; label: string; icon: typeof Gauge; group: string }> = [
   { id: "overview", label: "Overview", icon: Gauge, group: "Workspace" }, { id: "analytics", label: "Analytics", icon: BarChart3, group: "Workspace" }, { id: "applications", label: "Applications", icon: AppWindow, group: "Workspace" }, { id: "endpoints", label: "Endpoints", icon: Route, group: "Workspace" },
   { id: "messages", label: "Messages", icon: MessageSquareText, group: "Activity" }, { id: "deliveries", label: "Deliveries", icon: Activity, group: "Activity" }, { id: "event-types", label: "Event types", icon: Braces, group: "Activity" },
-  { id: "workspace", label: "Workspace", icon: Building2, group: "Manage" }, { id: "operations", label: "System health", icon: ServerCog, group: "Manage" }, { id: "blog", label: "Blog", icon: FileText, group: "Manage" }, { id: "api-keys", label: "API keys", icon: KeyRound, group: "Manage" }, { id: "team", label: "Team", icon: Users, group: "Manage" }, { id: "usage", label: "Usage", icon: BarChart3, group: "Manage" }, { id: "settings", label: "Automations", icon: Settings2, group: "Manage" }
+  { id: "workspace", label: "Workspace", icon: Building2, group: "Manage" }, { id: "operations", label: "System health", icon: ServerCog, group: "Manage" }, { id: "api-keys", label: "API keys", icon: KeyRound, group: "Manage" }, { id: "team", label: "Team", icon: Users, group: "Manage" }, { id: "usage", label: "Usage", icon: BarChart3, group: "Manage" }, { id: "settings", label: "Automations", icon: Settings2, group: "Manage" }
 ];
 
 export function DashboardClient() {
@@ -72,12 +71,12 @@ export function DashboardClient() {
     setOnboardingOpen(true);
   }
   const endpointName = (id: string) => data?.endpoints.find((endpoint) => endpoint.id === id)?.name || data?.events.find((event) => event.endpoint_id === id)?.endpoint_name || "Deleted endpoint";
-  useEffect(() => { if (data && ((view === "operations" && !["owner", "admin"].includes(data.context.organization.role)) || (view === "blog" && !data.system.operator))) setView("overview"); }, [data, view]);
+  useEffect(() => { if (data && view === "operations" && !["owner", "admin"].includes(data.context.organization.role)) setView("overview"); }, [data, view]);
   if (!data) return <main className="loading-screen"><Brand /><LoaderCircle className="spin" size={25} /><p>{error || "Loading your workspace"}</p>{error ? <button className="button secondary" onClick={() => load(true)}>Try again</button> : null}</main>;
-  const visibleNav = nav.filter((item) => (item.id !== "operations" || ["owner", "admin"].includes(data.context.organization.role)) && (item.id !== "blog" || data.system.operator));
+  const visibleNav = nav.filter((item) => item.id !== "operations" || ["owner", "admin"].includes(data.context.organization.role));
 
   return <main className="console-shell">
-    <aside className={`console-sidebar ${menuOpen ? "open" : ""}`}><div className="sidebar-brand"><Brand href="/dashboard" /><button className="icon-button mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={19} /></button></div><WorkspaceSwitcher data={data} switchOrganization={switchOrganization} manage={() => { setView("workspace"); setMenuOpen(false); }} /><nav className="console-nav">{["Workspace", "Activity", "Manage"].map((group) => <div key={group}><span>{group}</span>{visibleNav.filter((item) => item.group === group).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setMenuOpen(false); }}><Icon size={17} />{label}{id === "deliveries" && data.metrics.openIncidents ? <em>{data.metrics.openIncidents}</em> : null}</button>)}</div>)}</nav><a className="sidebar-docs" href="/docs"><BookOpen size={16} /> Documentation</a><div className="sidebar-user"><span>{data.context.user.name.slice(0, 1).toUpperCase()}</span><div><strong>{data.context.user.name}</strong><small>{data.context.organization.role}</small></div><button className="icon-button" onClick={logout} title="Sign out"><LogOut size={16} /></button></div></aside>
+    <aside className={`console-sidebar ${menuOpen ? "open" : ""}`}><div className="sidebar-brand"><Brand href="/dashboard" /><button className="icon-button mobile-only" onClick={() => setMenuOpen(false)} aria-label="Close menu"><X size={19} /></button></div><WorkspaceSwitcher data={data} switchOrganization={switchOrganization} manage={() => { setView("workspace"); setMenuOpen(false); }} /><nav className="console-nav">{["Workspace", "Activity", "Manage"].map((group) => <div key={group}><span>{group}</span>{visibleNav.filter((item) => item.group === group).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setMenuOpen(false); }}><Icon size={17} />{label}{id === "deliveries" && data.metrics.openIncidents ? <em>{data.metrics.openIncidents}</em> : null}</button>)}</div>)}</nav>{data.system.admin ? <a className="sidebar-admin" href="/admin"><ShieldCheck size={16} /> PayloadGrid Admin</a> : null}<a className="sidebar-docs" href="/docs"><BookOpen size={16} /> Documentation</a><div className="sidebar-user"><span>{data.context.user.name.slice(0, 1).toUpperCase()}</span><div><strong>{data.context.user.name}</strong><small>{data.context.organization.role}</small></div><button className="icon-button" onClick={logout} title="Sign out"><LogOut size={16} /></button></div></aside>
     <section className="console-content"><header className="console-topbar"><div><button className="icon-button mobile-only" onClick={() => setMenuOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div><span>{data.context.project.environment} /</span><strong>{visibleNav.find((item) => item.id === view)?.label}</strong></div></div><div><span className="environment-pill"><i /> {data.system.queueConfigured ? "durable queue" : "direct delivery"}</span><span className="environment-pill"><i /> {data.context.project.environment}</span><button className="icon-button" onClick={() => load(true)} title="Refresh"><RefreshCw className={busy === "refresh" ? "spin" : ""} size={17} /></button><span className="avatar">{data.context.user.name.slice(0, 1).toUpperCase()}</span></div></header>{error ? <div className="alert-banner"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={15} /></button></div> : null}{notice ? <div className="notice-banner"><CircleCheck size={17} /><span>{notice}</span><button onClick={() => setNotice("")}><X size={15} /></button></div> : null}<div className="view-content">
       {view === "overview" ? <OverviewView data={data} setView={setView} inspect={setSelectedEvent} endpointName={endpointName} lastRefresh={lastRefresh} startOnboarding={startOnboarding} /> : null}
       {view === "analytics" ? <AnalyticsView endpoints={data.endpoints} eventTypes={[...new Set([...data.eventTypes.map((item) => item.name), ...data.events.map((item) => item.event_type)])].sort()} refreshVersion={lastRefresh?.getTime() || 0} /> : null}
@@ -87,8 +86,7 @@ export function DashboardClient() {
       {view === "deliveries" ? <DeliveriesView initialEvents={data.events} endpoints={data.endpoints} inspect={setSelectedEvent} replay={replayDelivery} mutate={mutate} refreshVersion={lastRefresh?.getTime() || 0} /> : null}
       {view === "event-types" ? <EventTypesView data={data} busy={busy} submit={submit} mutate={mutate} /> : null}
       {view === "workspace" ? <WorkspaceView data={data} busy={busy} submit={submit} mutate={mutate} switchOrganization={switchOrganization} switchProject={switchProject} /> : null}
-      {view === "operations" && ["owner", "admin"].includes(data.context.organization.role) ? <OperationsView refreshVersion={lastRefresh?.getTime() || 0} isOperator={data.system.operator} /> : null}
-      {view === "blog" && data.system.operator ? <BlogView /> : null}
+      {view === "operations" && ["owner", "admin"].includes(data.context.organization.role) ? <OperationsView refreshVersion={lastRefresh?.getTime() || 0} /> : null}
       {view === "api-keys" ? <ApiKeysView data={data} busy={busy} submit={submit} revoke={(id) => { void mutate(`/api/api-keys/${id}`, undefined, "DELETE"); }} reveal={setNewToken} /> : null}
       {view === "team" ? <TeamView data={data} busy={busy} submit={submit} reveal={setInviteToken} mutate={mutate} /> : null}
       {view === "usage" ? <UsageView data={data} /> : null}

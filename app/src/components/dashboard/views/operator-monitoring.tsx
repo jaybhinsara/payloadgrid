@@ -38,7 +38,7 @@ export function OperatorMonitoring({ refreshVersion }: { refreshVersion: number 
   }
 
   return <section className="platform-monitoring">
-    <div className="operator-heading"><div><span className="section-label">PayloadGrid operator</span><h2>External monitoring</h2><p>Synthetic service checks and public incident controls across the platform.</p></div><ShieldCheck size={25} /></div>
+    <div className="operator-heading"><div><span className="section-label">PayloadGrid Admin</span><h2>External monitoring</h2><p>Synthetic service checks and public incident controls across the platform.</p></div><ShieldCheck size={25} /></div>
     {error ? <div className="operations-error"><TriangleAlert size={17} />{error}</div> : null}
     {!summary ? <section className="content-card operations-loading"><LoaderCircle className="spin" size={22} /><span>Loading platform monitoring</span></section> : <>
       <div className="monitoring-summary-grid"><article><small>Recorded checks</small><strong>{summary.totalChecks.toLocaleString()}</strong></article><article><small>Email alerts</small><strong>{summary.notifications.emailConfigured ? "Ready" : "Not configured"}</strong></article><article><small>Webhook alerts</small><strong>{summary.notifications.webhookConfigured ? "Ready" : "Not configured"}</strong></article></div>
