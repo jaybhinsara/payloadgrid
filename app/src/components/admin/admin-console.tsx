@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, ArrowLeft, BookOpen, Building2, FileText, Gauge, History, LoaderCircle, RefreshCw, Search, ShieldCheck, Users, Webhook, X } from "lucide-react";
+import { Activity, ArrowLeft, BookOpen, Building2, FileText, Gauge, History, LoaderCircle, Pencil, RefreshCw, Search, ShieldCheck, Trash2, Users, Webhook, X } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { BlogView } from "@/components/dashboard/views/blog";
 import { OperatorMonitoring } from "@/components/dashboard/views/operator-monitoring";
@@ -20,6 +20,8 @@ type Summary = {
   users: AdminUser[];
   audits: Audit[];
 };
+type Editor = { kind: "user"; item: AdminUser } | { kind: "workspace"; item: Workspace };
+type DeleteTarget = { kind: "user"; id: string; name: string; confirmation: string } | { kind: "workspace"; id: string; name: string; confirmation: string };
 
 const navigation: Array<{ id: AdminView; label: string; icon: typeof Gauge }> = [
   { id: "overview", label: "Overview", icon: Gauge },
@@ -36,6 +38,8 @@ export function AdminConsole({ user }: { user: { id: string; name: string; email
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const load = useCallback(async (manual = false) => {
     if (manual) setBusy("refresh");
@@ -62,6 +66,17 @@ export function AdminConsole({ user }: { user: { id: string; name: string; email
     finally { setBusy(""); }
   }
 
+  async function mutate(method: "PATCH" | "DELETE", url: string, payload: Record<string, unknown>, success: string) {
+    setBusy(url); setError(""); setNotice("");
+    try {
+      const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Admin operation failed");
+      setEditor(null); setDeleteTarget(null); setNotice(success); await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Admin operation failed"); }
+    finally { setBusy(""); }
+  }
+
   return <main className="admin-shell">
     <aside className="admin-sidebar">
       <div><Brand href="/admin" /><span>ADMIN</span></div>
@@ -75,21 +90,23 @@ export function AdminConsole({ user }: { user: { id: string; name: string; email
       <div className="admin-view">
         {!summary ? <div className="admin-loading"><LoaderCircle className="spin" size={22} /> Loading PayloadGrid Admin</div> : <>
           {view === "overview" ? <AdminOverview summary={summary} navigate={setView} /> : null}
-          {view === "workspaces" ? <WorkspaceAdmin workspaces={summary.workspaces} busy={busy} changePlan={changePlan} /> : null}
-          {view === "users" ? <UserAdmin users={summary.users} /> : null}
+          {view === "workspaces" ? <WorkspaceAdmin workspaces={summary.workspaces} busy={busy} changePlan={changePlan} edit={setEditor} remove={setDeleteTarget} /> : null}
+          {view === "users" ? <UserAdmin users={summary.users} currentUserId={user.id} edit={setEditor} remove={setDeleteTarget} /> : null}
           {view === "infrastructure" ? <><AdminHead eyebrow="Infrastructure" title="Platform health and incidents" copy="Monitor global service probes and control customer-facing incident updates." /><OperatorMonitoring refreshVersion={refreshVersion} /></> : null}
           {view === "publishing" ? <BlogView /> : null}
           {view === "audit" ? <AdminAudit audits={summary.audits} /> : null}
         </>}
       </div>
     </section>
+    {editor ? <AdminEditDialog editor={editor} busy={Boolean(busy)} close={() => setEditor(null)} save={(payload) => void mutate("PATCH", `/api/admin/${editor.kind === "user" ? "users" : "workspaces"}/${editor.item.id}`, payload, `${editor.item.name} was updated.`)} /> : null}
+    {deleteTarget ? <AdminDeleteDialog target={deleteTarget} busy={Boolean(busy)} close={() => setDeleteTarget(null)} confirm={() => void mutate("DELETE", `/api/admin/${deleteTarget.kind === "user" ? "users" : "workspaces"}/${deleteTarget.id}`, { confirmation: deleteTarget.confirmation }, `${deleteTarget.name} was deleted.`)} /> : null}
   </main>;
 }
 
-function UserAdmin({ users }: { users: AdminUser[] }) {
+function UserAdmin({ users, currentUserId, edit, remove }: { users: AdminUser[]; currentUserId: string; edit: (editor: Editor) => void; remove: (target: DeleteTarget) => void }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => users.filter((user) => `${user.name} ${user.email} ${user.workspaces.join(" ")}`.toLowerCase().includes(query.toLowerCase())), [query, users]);
-  return <><AdminHead eyebrow="Accounts" title="User directory" copy="Review account verification, linked identity providers, and workspace membership across the platform." /><label className="admin-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, or workspace" /><span>{filtered.length} users</span></label><section className="content-card admin-users"><header><span>User</span><span>Workspaces</span><span>Sign-in methods</span><span>Verification</span><span>Joined</span></header>{filtered.map((user) => <article key={user.id}><div><strong>{user.name}</strong><small>{user.email}</small></div><span title={user.workspaces.join(", ")}>{user.workspace_count} · {user.workspaces.slice(0, 2).join(", ") || "None"}</span><span>{user.providers.length ? user.providers.join(" + ") : "Password"}</span><b className={user.email_verified_at || !user.verification_required ? "verified" : "pending"}>{user.email_verified_at || !user.verification_required ? "Verified" : "Pending"}</b><time>{new Date(user.created_at).toLocaleDateString()}</time></article>)}</section></>;
+  return <><AdminHead eyebrow="Accounts" title="User directory" copy="Review account verification, linked identity providers, and workspace membership across the platform." /><label className="admin-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, or workspace" /><span>{filtered.length} users</span></label><section className="content-card admin-users"><header><span>User</span><span>Workspaces</span><span>Sign-in methods</span><span>Verification</span><span>Joined</span><span>Actions</span></header>{filtered.map((user) => <article key={user.id}><div><strong>{user.name}</strong><small>{user.email}</small></div><span title={user.workspaces.join(", ")}>{user.workspace_count} · {user.workspaces.slice(0, 2).join(", ") || "None"}</span><span>{user.providers.length ? user.providers.join(" + ") : "Password"}</span><b className={user.email_verified_at || !user.verification_required ? "verified" : "pending"}>{user.email_verified_at || !user.verification_required ? "Verified" : "Pending"}</b><time>{new Date(user.created_at).toLocaleDateString()}</time><span className="admin-row-actions"><button className="icon-button" title={`Edit ${user.name}`} onClick={() => edit({ kind: "user", item: user })}><Pencil size={14} /></button><button className="icon-button danger-icon" disabled={user.id === currentUserId} title={user.id === currentUserId ? "You cannot delete your current account" : `Delete ${user.name}`} onClick={() => remove({ kind: "user", id: user.id, name: user.name, confirmation: user.email })}><Trash2 size={14} /></button></span></article>)}</section></>;
 }
 
 function AdminOverview({ summary, navigate }: { summary: Summary; navigate: (view: AdminView) => void }) {
@@ -102,10 +119,20 @@ function AdminOverview({ summary, navigate }: { summary: Summary; navigate: (vie
   </>;
 }
 
-function WorkspaceAdmin({ workspaces, busy, changePlan }: { workspaces: Workspace[]; busy: string; changePlan: (workspace: Workspace, plan: string) => Promise<void> }) {
+function WorkspaceAdmin({ workspaces, busy, changePlan, edit, remove }: { workspaces: Workspace[]; busy: string; changePlan: (workspace: Workspace, plan: string) => Promise<void>; edit: (editor: Editor) => void; remove: (target: DeleteTarget) => void }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => workspaces.filter((workspace) => `${workspace.name} ${workspace.slug} ${workspace.plan}`.toLowerCase().includes(query.toLowerCase())), [query, workspaces]);
-  return <><AdminHead eyebrow="Tenants" title="Workspace administration" copy="Review tenant footprint, billing state, monthly activity, and explicitly assigned capacity." /><label className="admin-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search workspace, slug, or plan" /><span>{filtered.length} workspaces</span></label><section className="content-card admin-workspaces"><header><span>Workspace</span><span>Footprint</span><span>Monthly events</span><span>Billing</span><span>Assigned plan</span></header>{filtered.map((workspace) => <article key={workspace.id}><div><strong>{workspace.name}</strong><small>{workspace.slug}</small></div><span>{workspace.projects} projects · {workspace.endpoints} endpoints · {workspace.members} members</span><b>{workspace.events_this_month.toLocaleString()}</b><span>{workspace.billing_status || "No subscription"}</span><select aria-label={`Plan for ${workspace.name}`} value={workspace.plan} disabled={busy === workspace.id} onChange={(event) => void changePlan(workspace, event.target.value)}><option value="free">Free</option><option value="starter">Starter</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></article>)}</section></>;
+  return <><AdminHead eyebrow="Tenants" title="Workspace administration" copy="Review tenant footprint, billing state, monthly activity, and explicitly assigned capacity." /><label className="admin-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search workspace, slug, or plan" /><span>{filtered.length} workspaces</span></label><section className="content-card admin-workspaces"><header><span>Workspace</span><span>Footprint</span><span>Monthly events</span><span>Billing</span><span>Assigned plan</span><span>Actions</span></header>{filtered.map((workspace) => <article key={workspace.id}><div><strong>{workspace.name}</strong><small>{workspace.slug}</small></div><span>{workspace.projects} projects · {workspace.endpoints} endpoints · {workspace.members} members</span><b>{workspace.events_this_month.toLocaleString()}</b><span>{workspace.billing_status || "No subscription"}</span><select aria-label={`Plan for ${workspace.name}`} value={workspace.plan} disabled={busy === workspace.id} onChange={(event) => void changePlan(workspace, event.target.value)}><option value="free">Free</option><option value="starter">Starter</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select><span className="admin-row-actions"><button className="icon-button" title={`Edit ${workspace.name}`} onClick={() => edit({ kind: "workspace", item: workspace })}><Pencil size={14} /></button><button className="icon-button danger-icon" title={`Delete ${workspace.name}`} onClick={() => remove({ kind: "workspace", id: workspace.id, name: workspace.name, confirmation: workspace.name })}><Trash2 size={14} /></button></span></article>)}</section></>;
+}
+
+function AdminEditDialog({ editor, busy, close, save }: { editor: Editor; busy: boolean; close: () => void; save: (payload: Record<string, unknown>) => void }) {
+  const user = editor.kind === "user" ? editor.item : null;
+  return <div className="admin-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><form className="admin-dialog" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); save(editor.kind === "user" ? { name: data.get("name"), email: data.get("email"), verified: data.get("verified") === "on" } : { name: data.get("name") }); }}><header><div><span className="section-label">{editor.kind === "user" ? "Account" : "Tenant"}</span><h2>Edit {editor.item.name}</h2></div><button type="button" className="icon-button" title="Close" onClick={close}><X size={17} /></button></header><div className="admin-dialog-fields"><label>Name<input name="name" required minLength={2} maxLength={80} defaultValue={editor.item.name} /></label>{user ? <><label>Email<input name="email" required type="email" defaultValue={user.email} /></label><label className="admin-check"><input name="verified" type="checkbox" defaultChecked={Boolean(user.email_verified_at || !user.verification_required)} /><span><strong>Email verified</strong><small>Unchecking requires this user to verify before password sign-in.</small></span></label></> : <p>Renaming keeps the workspace slug and API identifiers unchanged.</p>}</div><footer><button type="button" className="button secondary" onClick={close}>Cancel</button><button className="button" disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <Pencil size={15} />} Save changes</button></footer></form></div>;
+}
+
+function AdminDeleteDialog({ target, busy, close, confirm }: { target: DeleteTarget; busy: boolean; close: () => void; confirm: () => void }) {
+  const [value, setValue] = useState("");
+  return <div className="admin-dialog-backdrop" role="presentation"><section className="admin-dialog admin-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title"><header><div><span className="section-label">Permanent action</span><h2 id="admin-delete-title">Delete {target.name}</h2></div><button className="icon-button" title="Close" onClick={close}><X size={17} /></button></header><div className="admin-dialog-fields"><p>{target.kind === "workspace" ? "Every project, endpoint, event, key, membership, and related record in this workspace will be permanently deleted." : "The account, sessions, linked sign-in methods, and remaining memberships will be permanently deleted."}</p><label>Type <strong>{target.confirmation}</strong> to confirm<input value={value} onChange={(event) => setValue(event.target.value)} autoComplete="off" /></label>{target.kind === "user" ? <small>Users who still own a workspace must transfer or delete it first.</small> : <small>Workspaces with an active subscription must be cancelled first.</small>}</div><footer><button className="button secondary" onClick={close}>Cancel</button><button className="button danger" disabled={busy || value !== target.confirmation} onClick={confirm}>{busy ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />} Delete permanently</button></footer></section></div>;
 }
 
 function AdminAudit({ audits }: { audits: Audit[] }) {

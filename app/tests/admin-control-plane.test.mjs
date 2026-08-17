@@ -5,6 +5,7 @@ import test from "node:test";
 const adminPage = await readFile(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
 const summaryRoute = await readFile(new URL("../src/app/api/admin/summary/route.ts", import.meta.url), "utf8");
 const workspaceRoute = await readFile(new URL("../src/app/api/admin/workspaces/[workspaceId]/route.ts", import.meta.url), "utf8");
+const userRoute = await readFile(new URL("../src/app/api/admin/users/[userId]/route.ts", import.meta.url), "utf8");
 const adminConsole = await readFile(new URL("../src/components/admin/admin-console.tsx", import.meta.url), "utf8");
 const dashboard = await readFile(new URL("../src/components/dashboard/dashboard-client.tsx", import.meta.url), "utf8");
 const operator = await readFile(new URL("../src/lib/operator.ts", import.meta.url), "utf8");
@@ -20,6 +21,7 @@ test("global admin APIs require platform admin authorization", () => {
   assert.match(summaryRoute, /requireSession\(\)/);
   assert.match(summaryRoute, /requirePlatformAdmin\(context\)/);
   assert.match(workspaceRoute, /requirePlatformAdmin\(context\)/);
+  assert.match(userRoute, /requirePlatformAdmin\(context\)/);
   assert.match(workspaceRoute, /z\.string\(\)\.uuid\(\)/);
 });
 
@@ -27,7 +29,25 @@ test("workspace plan overrides are bounded and platform-audited", () => {
   assert.match(workspaceRoute, /z\.enum\(\["free", "starter", "growth", "enterprise"\]\)/);
   assert.match(workspaceRoute, /update organizations set plan=/);
   assert.match(workspaceRoute, /writePlatformAudit/);
-  assert.match(workspaceRoute, /workspace\.plan_changed/);
+  assert.match(workspaceRoute, /workspace\.updated/);
+});
+
+test("admin account and workspace deletion have explicit safety barriers", () => {
+  assert.match(userRoute, /You cannot delete your current admin account/);
+  assert.match(userRoute, /owned_workspaces/);
+  assert.match(userRoute, /Platform admin accounts cannot be deleted here/);
+  assert.match(userRoute, /body\.confirmation !== user\.email/);
+  assert.match(workspaceRoute, /body\.confirmation !== workspace\.name/);
+  assert.match(workspaceRoute, /Cancel the active subscription before deleting/);
+  assert.match(userRoute, /user\.deleted/);
+  assert.match(workspaceRoute, /workspace\.deleted/);
+});
+
+test("admin directory exposes edit and delete controls", () => {
+  assert.match(adminConsole, /AdminEditDialog/);
+  assert.match(adminConsole, /AdminDeleteDialog/);
+  assert.match(adminConsole, /editor\.kind === "user" \? "users" : "workspaces"/);
+  assert.match(adminConsole, /Delete permanently/);
 });
 
 test("admin consolidates tenant, incident, publishing, and audit controls", () => {
