@@ -60,16 +60,15 @@ export function DashboardClient() {
 
   useEffect(() => {
     if (!data) return;
-    const complete = data.applications.length > 0 && data.endpoints.length > 0 && data.events.length > 0;
-    const key = `payloadgrid:onboarding:${data.context.organization.id}`;
-    if (!complete && window.localStorage.getItem(key) !== "dismissed") setOnboardingOpen(true);
+    const key = `payloadgrid:onboarding:${data.context.project.id}`;
+    if (!data.activation.completed && window.localStorage.getItem(key) !== "dismissed") setOnboardingOpen(true);
   }, [data]);
   function closeOnboarding() {
-    if (data) window.localStorage.setItem(`payloadgrid:onboarding:${data.context.organization.id}`, "dismissed");
+    if (data) window.localStorage.setItem(`payloadgrid:onboarding:${data.context.project.id}`, "dismissed");
     setOnboardingOpen(false);
   }
   function startOnboarding() {
-    if (data) window.localStorage.removeItem(`payloadgrid:onboarding:${data.context.organization.id}`);
+    if (data) window.localStorage.removeItem(`payloadgrid:onboarding:${data.context.project.id}`);
     setOnboardingOpen(true);
   }
   const endpointName = (id: string) => data?.endpoints.find((endpoint) => endpoint.id === id)?.name || data?.events.find((event) => event.endpoint_id === id)?.endpoint_name || "Deleted endpoint";
@@ -99,7 +98,7 @@ export function DashboardClient() {
     {newToken ? <SecretModal title="API key created" copy="This key is shown once. Store it securely before closing." secret={newToken} close={() => setNewToken("")} copyValue={copy} /> : null}
     {inviteToken ? <SecretModal title="Invitation link created" copy="Share this one-time signup link securely with the invited teammate." secret={inviteToken} close={() => setInviteToken("")} copyValue={copy} /> : null}
     {embedUrl ? <SecretModal title="Embed link created" copy="This customer-facing delivery view expires in 30 minutes. Use it as an iframe source or open it directly." secret={embedUrl} close={() => setEmbedUrl("")} copyValue={copy} /> : null}
-    {onboardingOpen ? <OnboardingWizard data={data} mutate={mutate} close={closeOnboarding} goTo={setView} /> : null}
+    {onboardingOpen ? <OnboardingWizard data={data} mutate={mutate} close={closeOnboarding} goTo={setView} revealKey={setNewToken} /> : null}
   </main>;
 }
 
