@@ -13,6 +13,9 @@ create table if not exists users (
 
 alter table users add column if not exists verification_required boolean not null default false;
 alter table users alter column password_hash drop not null;
+alter table users add column if not exists suspended_at timestamptz;
+alter table users add column if not exists suspension_reason text;
+alter table users add column if not exists suspended_by uuid references users(id) on delete set null;
 
 create table if not exists oauth_accounts (
   id uuid primary key default gen_random_uuid(),
@@ -63,6 +66,10 @@ create table if not exists organizations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table organizations add column if not exists suspended_at timestamptz;
+alter table organizations add column if not exists suspension_reason text;
+alter table organizations add column if not exists suspended_by uuid references users(id) on delete set null;
 
 create table if not exists billing_subscriptions (
   id uuid primary key default gen_random_uuid(),

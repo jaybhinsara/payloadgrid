@@ -15,9 +15,11 @@ export async function authenticateApiKey(request: Request, requiredScope?: ApiSc
     select k.id, k.project_id, k.scopes, p.organization_id
     from api_keys k
     join projects p on p.id = k.project_id
+    join organizations o on o.id = p.organization_id
     where k.key_hash = ${sha256(token)}
       and k.revoked_at is null
       and (k.expires_at is null or k.expires_at > now())
+      and o.suspended_at is null
     limit 1
   `;
   if (!key) return null;

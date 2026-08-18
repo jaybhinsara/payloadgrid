@@ -5,11 +5,18 @@ import { requireSql } from "@/lib/db";
 import { isPlatformAdmin, requirePlatformAdmin } from "@/lib/operator";
 import { writePlatformAudit } from "@/lib/platform-audit";
 
-const updateSchema = z.object({
+const profileSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   verified: z.boolean()
 });
+const lifecycleSchema = z.object({
+  action: z.enum(["suspend", "reactivate", "force_logout"]),
+  reason: z.string().trim().min(3).max(300).optional()
+}).superRefine((value, context) => {
+  if (value.action === "suspend" && !value.reason) context.addIssue({ code: "custom", path: ["reason"], message: "A suspension reason is required" });
+});
+const updateSchema = z.union([profileSchema, lifecycleSchema]);
 const deleteSchema = z.object({ confirmation: z.string() });
 type RouteContext = { params: Promise<{ userId: string }> };
 
@@ -20,11 +27,23 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
     const body = updateSchema.parse(await request.json());
     const userId = z.string().uuid().parse((await contextValue.params).userId);
     const sql = requireSql();
-    const [current] = await sql`select id, name, email, email_verified_at from users where id=${userId} limit 1`;
+    const [current] = await sql`select id, name, email, email_verified_at, suspended_at, suspension_reason from users where id=${userId} limit 1`;
     if (!current) return NextResponse.json({ ok: false, error: "User not found" }, { status: 404 });
-    if (isPlatformAdmin(String(current.email)) && userId !== context.user.id) {
-      return NextResponse.json({ ok: false, error: "Another platform admin account cannot be modified here" }, { status: 403 });
+    if ("action" in body) {
+      if (userId === context.user.id) return NextResponse.json({ ok: false, error: "You cannot change lifecycle state for your current admin account" }, { status: 409 });
+      if (isPlatformAdmin(String(current.email))) return NextResponse.json({ ok: false, error: "Platform admin lifecycle cannot be changed here" }, { status: 403 });
+      if (body.action === "suspend") {
+        await sql`update users set suspended_at=coalesce(suspended_at, now()), suspension_reason=${body.reason || null}, suspended_by=${context.user.id}, updated_at=now() where id=${userId}`;
+        await sql`delete from sessions where user_id=${userId}`;
+      } else if (body.action === "reactivate") {
+        await sql`update users set suspended_at=null, suspension_reason=null, suspended_by=null, updated_at=now() where id=${userId}`;
+      } else {
+        await sql`delete from sessions where user_id=${userId}`;
+      }
+      await writePlatformAudit(context.user.id, `user.${body.action}`, "user", userId, { email: current.email, reason: body.reason || null });
+      return NextResponse.json({ ok: true, action: body.action });
     }
+    if (isPlatformAdmin(String(current.email)) && userId !== context.user.id) return NextResponse.json({ ok: false, error: "Another platform admin account cannot be modified here" }, { status: 403 });
     if (userId === context.user.id && body.email !== context.user.email.toLowerCase()) {
       return NextResponse.json({ ok: false, error: "Change your own admin email through account security settings" }, { status: 409 });
     }

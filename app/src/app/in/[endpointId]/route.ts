@@ -23,11 +23,12 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     if (Buffer.byteLength(rawBody, "utf8") > MAX_PAYLOAD_BYTES) return NextResponse.json({ ok: false, error: "Payload exceeds the 256 KB plan limit" }, { status: 413 });
     const sql = requireSql();
     const [endpoint] = await sql`
-      select id, project_id, application_id, provider, destination_url, is_active, provider_secret_encrypted,
-        provider_verification_required, rate_limit_per_minute, circuit_breaker_enabled,
-        circuit_breaker_threshold, circuit_state, name, revenue_tracking_mode, revenue_amount_path,
-        revenue_currency_path, revenue_fixed_currency, revenue_amount_unit
-      from endpoints where id = ${endpointId} and deleted_at is null limit 1
+      select ep.id, ep.project_id, ep.application_id, ep.provider, ep.destination_url, ep.is_active, ep.provider_secret_encrypted,
+        ep.provider_verification_required, ep.rate_limit_per_minute, ep.circuit_breaker_enabled,
+        ep.circuit_breaker_threshold, ep.circuit_state, ep.name, ep.revenue_tracking_mode, ep.revenue_amount_path,
+        ep.revenue_currency_path, ep.revenue_fixed_currency, ep.revenue_amount_unit
+      from endpoints ep join projects p on p.id=ep.project_id join organizations o on o.id=p.organization_id
+      where ep.id = ${endpointId} and ep.deleted_at is null and o.suspended_at is null limit 1
     `;
     if (!endpoint?.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive PayloadGrid endpoint" }, { status: 404 });
     await enforceInboundRateLimit(String(endpoint.id));

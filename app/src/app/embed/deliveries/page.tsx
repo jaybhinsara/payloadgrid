@@ -14,7 +14,10 @@ export default async function EmbeddedDeliveries({ searchParams }: { searchParam
   const claims = verifyEmbedToken(token);
   if (!claims) return <main className="embed-shell"><section className="embed-error"><h1>Link expired</h1><p>Request a fresh delivery-history link from the host application.</p></section></main>;
   const sql = requireSql();
-  const [application] = await sql`select name from applications where id = ${claims.applicationId} and project_id = ${claims.projectId} limit 1`;
+  const [application] = await sql`
+    select a.name from applications a join projects p on p.id=a.project_id join organizations o on o.id=p.organization_id
+    where a.id = ${claims.applicationId} and a.project_id = ${claims.projectId} and o.suspended_at is null limit 1
+  `;
   if (!application) return <main className="embed-shell"><section className="embed-error"><h1>Application unavailable</h1></section></main>;
   const events = await sql`
     select e.id, e.event_type, e.status, e.is_simulation, e.received_at, ep.name as endpoint_name,

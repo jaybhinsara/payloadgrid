@@ -46,6 +46,11 @@ export async function processDelivery(eventId: string): Promise<DeliveryProcessR
       and status in ('queued','received','retrying')
       and (next_retry_at is null or next_retry_at <= now())
       and (locked_at is null or locked_at < now() - interval '5 minutes')
+      and exists (
+        select 1 from endpoints ep join projects p on p.id=ep.project_id
+        join organizations o on o.id=p.organization_id
+        where ep.id=webhook_events.endpoint_id and o.suspended_at is null
+      )
     returning id, endpoint_id, message_id, direction, event_type, request_body, request_raw_body, request_content_type,
       max_retries, revenue_amount, revenue_at_risk, is_simulation
   `;

@@ -41,7 +41,7 @@ export async function GET() {
           from webhook_events e join endpoints ep on ep.id=e.endpoint_id join projects p on p.id=ep.project_id
           where e.is_simulation=false and e.received_at >= date_trunc('month', now()) group by p.organization_id
         )
-        select o.id, o.name, o.slug, o.plan, o.created_at, o.updated_at,
+        select o.id, o.name, o.slug, o.plan, o.created_at, o.updated_at, o.suspended_at, o.suspension_reason,
           coalesce(members.total, 0)::int as members,
           coalesce(projects.total, 0)::int as projects,
           coalesce(endpoints.total, 0)::int as endpoints,
@@ -57,7 +57,7 @@ export async function GET() {
         order by o.created_at desc limit 250
       `,
       sql`
-        select u.id, u.name, u.email, u.email_verified_at, u.verification_required, u.created_at,
+        select u.id, u.name, u.email, u.email_verified_at, u.verification_required, u.created_at, u.suspended_at, u.suspension_reason,
           count(distinct om.organization_id)::int as workspace_count,
           coalesce(array_agg(distinct o.name) filter (where o.name is not null), '{}') as workspaces,
           coalesce(array_agg(distinct oa.provider) filter (where oa.provider is not null), '{}') as providers

@@ -57,6 +57,7 @@ export async function getSessionContext(): Promise<SessionContext | null> {
     from sessions s join users u on u.id = s.user_id join organization_members om on om.user_id = u.id
     join organizations o on o.id = om.organization_id join projects p on p.organization_id = o.id
     where s.token_hash = ${sha256(token)} and s.expires_at > now()
+      and u.suspended_at is null and o.suspended_at is null
     order by om.created_at asc, p.created_at asc
   `;
   if (!rows.length) return null;

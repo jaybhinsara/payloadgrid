@@ -182,14 +182,14 @@ async function githubProfile(code: string, state: OAuthState): Promise<ProviderP
 async function establishAccount(provider: OAuthProvider, profile: ProviderProfile, invitationId: string | null) {
   const sql = requireSql();
   const [linked] = await sql`
-    select u.id, u.name, u.email
+    select u.id, u.name, u.email, u.suspended_at
     from oauth_accounts oa join users u on u.id = oa.user_id
     where oa.provider = ${provider} and oa.provider_user_id = ${profile.providerUserId}
     limit 1
   `;
   let user = linked;
   if (!user) {
-    [user] = await sql`select id, name, email from users where lower(email) = ${profile.email} limit 1`;
+    [user] = await sql`select id, name, email, suspended_at from users where lower(email) = ${profile.email} limit 1`;
     if (!user) {
       [user] = await sql`
         insert into users (name, email, password_hash, email_verified_at, verification_required)
@@ -210,6 +210,8 @@ async function establishAccount(provider: OAuthProvider, profile: ProviderProfil
       if (!winner || String(winner.user_id) !== String(user.id)) throw new OAuthError("oauth_account_conflict", "This provider account is linked to another user");
     }
   }
+
+  if (user.suspended_at) throw new OAuthError("account_suspended", "This account is suspended. Contact PayloadGrid support.");
 
   let organizationId: string | null = null;
   if (invitationId) {

@@ -22,9 +22,11 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
       from webhook_events e
       join endpoints ep on ep.id = e.endpoint_id
       join projects p on p.id = ep.project_id
+      join organizations o on o.id = p.organization_id
       left join delivery_attempts a on a.event_id = e.id
       where e.id = ${eventId} and e.application_id = ${claims.applicationId}
         and ep.project_id = ${claims.projectId} and ep.deleted_at is null and ep.is_active = true
+        and o.suspended_at is null
         and e.status in ('delivered','failed','dead_letter','cancelled')
       group by e.id, e.endpoint_id, ep.rate_limit_per_minute, p.organization_id
       limit 1

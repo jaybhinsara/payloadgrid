@@ -46,6 +46,11 @@ async function claimDispatchJobs(limit: number, eventId?: string) {
       where (${eventId || null}::uuid is null or event_id = ${eventId || null}::uuid)
         and ((status = 'pending' and available_at <= now())
          or (status = 'publishing' and locked_at < now() - interval '2 minutes'))
+        and exists (
+          select 1 from webhook_events e join endpoints ep on ep.id=e.endpoint_id
+          join projects p on p.id=ep.project_id join organizations o on o.id=p.organization_id
+          where e.id=dispatch_jobs.event_id and o.suspended_at is null
+        )
       order by available_at asc, created_at asc
       for update skip locked
       limit ${limit}
@@ -148,6 +153,11 @@ export async function recoverMissingDispatchJobs(limit = 100) {
     left join dispatch_jobs j on j.event_id = e.id
     where j.id is null and e.status in ('queued', 'received', 'retrying')
       and (e.next_retry_at is null or e.next_retry_at <= now())
+      and exists (
+        select 1 from endpoints ep join projects p on p.id=ep.project_id
+        join organizations o on o.id=p.organization_id
+        where ep.id=e.endpoint_id and o.suspended_at is null
+      )
     order by coalesce(e.next_retry_at, e.received_at) asc
     limit ${Math.min(Math.max(limit, 1), 500)}
     on conflict (event_id) do nothing
