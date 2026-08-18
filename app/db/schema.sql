@@ -118,6 +118,31 @@ create table if not exists billing_webhook_events (
 
 create index if not exists billing_subscriptions_status_idx on billing_subscriptions(status, current_period_end);
 
+create table if not exists billing_transactions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete restrict,
+  provider text not null check (provider in ('razorpay', 'manual')),
+  provider_order_id text not null,
+  provider_payment_id text not null,
+  plan text not null check (plan in ('starter', 'growth', 'enterprise')),
+  amount integer not null check (amount > 0),
+  currency text not null check (currency ~ '^[A-Z]{3}$'),
+  status text not null check (status in ('captured', 'partially_refunded', 'refunded', 'disputed')),
+  paid_at timestamptz not null,
+  refunded_amount integer not null default 0 check (refunded_amount >= 0 and refunded_amount <= amount),
+  refunded_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (provider, provider_order_id),
+  unique (provider, provider_payment_id)
+);
+
+create index if not exists billing_transactions_organization_paid_idx
+  on billing_transactions(organization_id, paid_at desc);
+create index if not exists billing_transactions_status_paid_idx
+  on billing_transactions(status, paid_at desc);
+
 alter table billing_subscriptions drop constraint if exists billing_subscriptions_provider_check;
 alter table billing_subscriptions add constraint billing_subscriptions_provider_check
   check (provider in ('lemon_squeezy', 'paddle', 'razorpay', 'manual'));

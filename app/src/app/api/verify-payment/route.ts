@@ -66,13 +66,24 @@ export async function POST(request: Request) {
         values ('razorpay', ${payment.id}, 'payment.captured')
         on conflict (provider, provider_event_id) do nothing
         returning provider_event_id
+      ), payment_record as (
+        insert into billing_transactions (
+          organization_id, provider, provider_order_id, provider_payment_id, plan,
+          amount, currency, status, paid_at, metadata
+        )
+        select ${context.organization.id}, 'razorpay', ${order.id}, ${payment.id}, ${planId},
+          ${expectedAmount}, ${expectedCurrency}, 'captured', now(),
+          ${JSON.stringify({ source: "standard_checkout", billingPeriod: "one_month" })}::jsonb
+        from accepted
+        on conflict (provider, provider_payment_id) do nothing
+        returning organization_id
       ), subscription as (
         insert into billing_subscriptions (
           organization_id, provider, provider_customer_id, provider_subscription_id, plan, status,
           current_period_start, current_period_end, cancel_at_period_end
         )
         select ${context.organization.id}, 'razorpay', ${payment.id}, ${order.id}, ${planId}, 'active', now(), now() + interval '1 month', true
-        from accepted
+        from payment_record
         on conflict (organization_id) do update set
           provider = excluded.provider,
           provider_customer_id = excluded.provider_customer_id,

@@ -3,13 +3,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, ArrowLeft, BookOpen, Building2, CirclePlay, Eye, FileText, Gauge, Headset, History, LoaderCircle, LogOut, Pencil, RefreshCw, Search, ShieldBan, ShieldCheck, Trash2, Users, Webhook, X } from "lucide-react";
+import { Activity, ArrowLeft, BookOpen, Building2, CircleDollarSign, CirclePlay, Eye, FileText, Gauge, Headset, History, LoaderCircle, LogOut, Pencil, RefreshCw, Search, ShieldBan, ShieldCheck, Trash2, Users, Webhook, X } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { AdminSupport } from "@/components/admin/admin-support";
+import { AdminBilling } from "@/components/admin/admin-billing";
 import { BlogView } from "@/components/dashboard/views/blog";
 import { OperatorMonitoring } from "@/components/dashboard/views/operator-monitoring";
 
-type AdminView = "overview" | "support" | "workspaces" | "users" | "infrastructure" | "publishing" | "audit";
+type AdminView = "overview" | "support" | "billing" | "workspaces" | "users" | "infrastructure" | "publishing" | "audit";
 type Workspace = { id: string; name: string; slug: string; plan: string; created_at: string; members: number; projects: number; endpoints: number; events_this_month: number; billing_status: string | null; current_period_end: string | null; suspended_at: string | null; suspension_reason: string | null };
 type AdminUser = { id: string; name: string; email: string; email_verified_at: string | null; verification_required: boolean; created_at: string; workspace_count: number; workspaces: string[]; providers: string[]; suspended_at: string | null; suspension_reason: string | null };
 type WorkspaceDetail = { workspace: Workspace; members: Array<{ id: string; name: string; email: string; role: string; suspended_at: string | null; created_at: string }>; projects: Array<{ id: string; name: string; slug: string; environment: string; endpoints: number; applications: number; active_keys: number; created_at: string }> };
@@ -29,6 +30,7 @@ type LifecycleTarget = { kind: "user" | "workspace"; id: string; name: string; a
 const navigation: Array<{ id: AdminView; label: string; icon: typeof Gauge }> = [
   { id: "overview", label: "Overview", icon: Gauge },
   { id: "support", label: "Support operations", icon: Headset },
+  { id: "billing", label: "Billing", icon: CircleDollarSign },
   { id: "workspaces", label: "Workspaces", icon: Building2 },
   { id: "users", label: "Users", icon: Users },
   { id: "infrastructure", label: "Infrastructure", icon: Activity },
@@ -107,6 +109,7 @@ export function AdminConsole({ user }: { user: { id: string; name: string; email
         {!summary ? <div className="admin-loading"><LoaderCircle className="spin" size={22} /> Loading PayloadGrid Admin</div> : <>
           {view === "overview" ? <AdminOverview summary={summary} navigate={setView} /> : null}
           {view === "support" ? <AdminSupport workspaces={summary.workspaces} /> : null}
+          {view === "billing" ? <AdminBilling /> : null}
           {view === "workspaces" ? <WorkspaceAdmin workspaces={summary.workspaces} busy={busy} changePlan={changePlan} edit={setEditor} remove={setDeleteTarget} lifecycle={setLifecycleTarget} inspect={inspectWorkspace} /> : null}
           {view === "users" ? <UserAdmin users={summary.users} currentUserId={user.id} edit={setEditor} remove={setDeleteTarget} lifecycle={setLifecycleTarget} /> : null}
           {view === "infrastructure" ? <><AdminHead eyebrow="Infrastructure" title="Platform health and incidents" copy="Monitor global service probes and control customer-facing incident updates." /><OperatorMonitoring refreshVersion={refreshVersion} /></> : null}
