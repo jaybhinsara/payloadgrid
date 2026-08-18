@@ -1,21 +1,24 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArrowRight, Check, Clock3 } from "lucide-react";
 import { PublicPage } from "@/components/marketing/public-page";
 import { RazorpayCheckoutButton } from "@/components/razorpay-checkout-button";
 import { paymentsEnabled } from "@/lib/payments";
-import { PLAN_CATALOG, type PlanId } from "@/lib/plans";
+import { PLAN_CATALOG, planMonthlyPrice, type PlanId } from "@/lib/plans";
+import { configuredCheckoutCurrency, formatRegionalPrice } from "@/lib/regional-pricing";
 import { publicMetadata } from "@/lib/seo";
 
 export const metadata = publicMetadata({ title: "Webhook Infrastructure Pricing", description: "PayloadGrid pricing for reliable inbound and outbound webhooks, retries, replay, signatures, analytics, and delivery evidence.", path: "/pricing" });
 
 const order: PlanId[] = ["free", "starter", "growth", "enterprise"];
 
-export default function PricingPage() {
+export default async function PricingPage() {
   const checkoutEnabled = paymentsEnabled();
+  const currency = configuredCheckoutCurrency(await headers()) || "USD";
   return <PublicPage eyebrow="Simple, bounded pricing" title="Start free. Pay when traffic grows." intro="Every plan includes the complete delivery path. Higher tiers increase accepted events, throughput, retention, endpoints, and team capacity without charging again for retry attempts.">
     <section className="pricing-grid">
       {order.map((id) => { const plan = PLAN_CATALOG[id]; return <article className={id === "starter" ? "featured" : ""} key={id}>
-        <header><span>{id === "starter" ? "RECOMMENDED" : plan.name.toUpperCase()}</span><h2>{plan.monthlyPriceInr === null ? "Custom" : `₹${plan.monthlyPriceInr.toLocaleString("en-IN")}`}</h2><p>{plan.monthlyPriceInr === null ? "capacity agreement" : "per workspace / month"}</p></header>
+        <header><span>{id === "starter" ? "RECOMMENDED" : plan.name.toUpperCase()}</span><h2>{plan.id === "enterprise" ? "Custom" : formatRegionalPrice(planMonthlyPrice(plan, currency) || 0, currency)}</h2><p>{plan.id === "enterprise" ? "capacity agreement" : `${currency} per workspace / month`}</p></header>
         <p>{plan.description}</p>
         <ul><li><Check size={16} /> {plan.limits.messagesPerMonth.toLocaleString()} accepted events / month</li><li><Check size={16} /> {plan.limits.endpoints.toLocaleString()} endpoints / project</li><li><Check size={16} /> {plan.limits.teamMembers.toLocaleString()} team members</li><li><Check size={16} /> {plan.limits.payloadRetentionDays}-day payload retention</li>{plan.features.map((feature) => <li key={feature}><Check size={16} /> {feature}</li>)}</ul>
         {id === "starter" || id === "growth" ? checkoutEnabled

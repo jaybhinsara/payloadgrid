@@ -5,8 +5,9 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("commercial plans are centralized and enforced by organization plan", async () => {
-  const [plans, limits, dashboard, pricing, payments, createOrder, verifyPayment, env, schema] = await Promise.all([
+  const [plans, regionalPricing, limits, dashboard, pricing, payments, createOrder, verifyPayment, env, schema] = await Promise.all([
     read("../src/lib/plans.ts"),
+    read("../src/lib/regional-pricing.ts"),
     read("../src/lib/limits.ts"),
     read("../src/app/api/dashboard/route.ts"),
     read("../src/app/pricing/page.tsx"),
@@ -17,8 +18,14 @@ test("commercial plans are centralized and enforced by organization plan", async
     read("../db/schema.sql")
   ]);
   assert.match(plans, /monthlyPriceInr: 2499/);
+  assert.match(plans, /monthlyPriceUsd: 29/);
   assert.match(plans, /messagesPerMonth: 100_000/);
   assert.match(plans, /monthlyPriceInr: 12499/);
+  assert.match(plans, /monthlyPriceUsd: 149/);
+  assert.match(plans, /planMonthlyPrice/);
+  assert.match(regionalPricing, /x-vercel-ip-country/);
+  assert.match(regionalPricing, /return countryCurrencies\[country\] \|\| "USD"/);
+  assert.match(regionalPricing, /priceInCurrencySubunits/);
   assert.match(plans, /messagesPerMonth: 1_000_000/);
   assert.match(limits, /planLimits\(String\(account\?\.plan \|\| "free"\)\)/);
   assert.match(limits, /p\.organization_id=\$\{account\?\.organization_id\}/);
@@ -27,8 +34,11 @@ test("commercial plans are centralized and enforced by organization plan", async
   assert.match(pricing, /Payments temporarily unavailable/);
   assert.match(payments, /PAYMENTS_ENABLED/);
   assert.match(createOrder, /PAYMENTS_DISABLED/);
+  assert.match(createOrder, /configuredCheckoutCurrency\(request\.headers\)/);
+  assert.match(verifyPayment, /order\.notes\?\.pricing_currency/);
   assert.match(verifyPayment, /PAYMENTS_DISABLED/);
   assert.match(env, /PAYMENTS_ENABLED=false/);
+  assert.match(env, /RAZORPAY_CHECKOUT_CURRENCY=AUTO/);
   assert.match(pricing, /does not renew automatically/);
   assert.match(schema, /create table if not exists billing_subscriptions/);
   assert.match(schema, /provider_event_id text not null/);

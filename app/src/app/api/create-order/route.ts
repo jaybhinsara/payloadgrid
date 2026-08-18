@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
-import { getPlan } from "@/lib/plans";
+import { getPlan, planMonthlyPrice } from "@/lib/plans";
 import { paymentsEnabled } from "@/lib/payments";
+import { configuredCheckoutCurrency, priceInCurrencySubunits } from "@/lib/regional-pricing";
 import { getRazorpayClient, RazorpayConfigurationError, razorpayErrorDetails, razorpayErrorStatus } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
@@ -18,14 +19,15 @@ export async function POST(request: Request) {
     requireRole(context, ["owner", "admin"]);
     const { plan: planId } = requestSchema.parse(await request.json());
     const plan = getPlan(planId);
-    const amount = Math.round(Number(plan.monthlyPriceInr) * 100);
+    const currency = configuredCheckoutCurrency(request.headers);
+    const monthlyPrice = currency ? planMonthlyPrice(plan, currency) : null;
+    const amount = currency && monthlyPrice ? priceInCurrencySubunits(monthlyPrice, currency) : 0;
     if (!Number.isSafeInteger(amount) || amount < 100) {
       return NextResponse.json({ ok: false, error: "Order amount must be at least 100 currency subunits" }, { status: 400 });
     }
 
-    const currency = (process.env.RAZORPAY_CHECKOUT_CURRENCY || "INR").trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      return NextResponse.json({ ok: false, error: "Razorpay checkout currency is invalid" }, { status: 500 });
+    if (!currency || !monthlyPrice) {
+      return NextResponse.json({ ok: false, error: "Razorpay checkout currency is unsupported" }, { status: 500 });
     }
 
     const order = await getRazorpayClient().orders.create({
@@ -36,6 +38,7 @@ export async function POST(request: Request) {
         organization_id: context.organization.id,
         user_id: context.user.id,
         plan: planId,
+        pricing_currency: currency,
         billing_period: "one_month"
       }
     });

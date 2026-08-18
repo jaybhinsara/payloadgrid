@@ -5,11 +5,11 @@ export function MarketingHero({ signedIn = false }: { signedIn?: boolean }) {
   return <section className="future-hero">
     <div className="hero-signal-line" aria-hidden="true"><span>EVENT</span><i /><span>ROUTED</span><i /><span>DELIVERED</span></div>
     <div className="future-hero-copy" data-reveal>
-      <span className="signal-label"><i /> Global webhook infrastructure · Built for production teams</span>
-      <h1>Webhook infrastructure, your team can operate.</h1>
-      <p>Receive provider callbacks or send customer-facing events through one control plane. PayloadGrid records delivery intent transactionally, then handles verification, asynchronous fan-out, retries, replay, and evidence.</p>
+      <span className="signal-label"><i /> Webhook service · Gateway · Delivery platform</span>
+      <h1>Every webhook. One place to send, receive, and recover.</h1>
+      <p>PayloadGrid is a webhook infrastructure platform for teams that need more than a POST request. Receive third-party callbacks, deliver events to customers, test integrations, recover failures, and give every team one searchable delivery history.</p>
       <div className="hero-actions">{signedIn ? <Link className="button primary large" href="/dashboard"><LayoutDashboard size={18} /> Open dashboard</Link> : <Link className="button primary large" href="/signup">Start building free <ArrowRight size={18} /></Link>}<Link className="button secondary large" href="/playground"><Code2 size={18} /> Open playground</Link></div>
-      <div className="trust-line"><span><Check size={15} /> Free 10,000 events / month</span><span><Check size={15} /> Transactional acceptance</span><span><Check size={15} /> Inbound + outbound</span></div>
+      <div className="trust-line"><span><Check size={15} /> Free 10,000 events / month</span><span><Check size={15} /> No card to start</span><span><Check size={15} /> Inbound + outbound</span></div>
     </div>
     <div className="control-plane" data-reveal aria-label="PayloadGrid delivery control plane">
       <div className="plane-topbar"><div><span /><span /><span /></div><code>payloadgrid / production / live</code><i><Radio size={12} /> CONNECTED</i></div>

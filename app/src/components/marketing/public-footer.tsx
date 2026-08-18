@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Brand } from "@/components/brand";
 
 const groups = [
-  { title: "Product", links: [["Platform", "/#platform"], ["Pricing", "/pricing"], ["Playground", "/playground"], ["Status", "/status"]] },
+  { title: "Product", links: [["Webhook service", "/webhook-service"], ["Webhook delivery", "/webhook-delivery"], ["Inbound gateway", "/webhook-gateway"], ["Webhook testing", "/webhook-testing"], ["Retries", "/webhook-retries"], ["Pricing", "/pricing"], ["Playground", "/playground"], ["Status", "/status"]] },
   { title: "Developers", links: [["Documentation", "/docs"], ["Blog", "/blog"], ["API reference", "/api/openapi"], ["Security", "/security"]] },
   { title: "Company", links: [["About", "/about"], ["Contact", "/contact"], ["Privacy", "/privacy"], ["Terms", "/terms"]] }
 ] as const;

@@ -3,15 +3,15 @@ import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
-const title = "Webhook Infrastructure for Reliable Delivery | PayloadGrid";
-const description = "PayloadGrid is global webhook infrastructure for SaaS and developer teams. Send, receive, verify, retry, replay, and monitor webhook delivery.";
+const title = "Webhook Service, Gateway and Delivery Platform | PayloadGrid";
+const description = "PayloadGrid is webhook infrastructure for sending, receiving, testing, retrying, replaying, and monitoring inbound and outbound webhook delivery.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: title, template: "%s | PayloadGrid" },
   description,
   applicationName: "PayloadGrid",
-  keywords: ["webhook infrastructure", "webhook delivery", "webhook retries", "webhook gateway", "webhook monitoring", "webhook replay", "outbound webhooks", "inbound webhooks", "webhook API", "webhook service", "payment webhooks", "commerce webhooks"],
+  keywords: ["webhook", "webhook service", "webhook infrastructure", "webhook delivery platform", "webhook gateway", "webhook testing", "webhook endpoint", "webhook API", "webhook retries", "webhook monitoring", "webhook replay", "webhook debugging", "outbound webhooks", "inbound webhooks", "webhooks as a service", "payment webhooks", "commerce webhooks"],
   authors: [{ name: "PayloadGrid", url: "/" }],
   creator: "PayloadGrid",
   publisher: "PayloadGrid",

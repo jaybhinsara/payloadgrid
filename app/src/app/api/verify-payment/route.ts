@@ -4,8 +4,9 @@ import { z } from "zod";
 import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { requireSql } from "@/lib/db";
-import { getPlan, type PlanId } from "@/lib/plans";
+import { getPlan, planMonthlyPrice, type PlanId } from "@/lib/plans";
 import { paymentsEnabled } from "@/lib/payments";
+import { isPricingCurrency, priceInCurrencySubunits } from "@/lib/regional-pricing";
 import { getRazorpayClient, getRazorpayConfig, RazorpayConfigurationError, razorpayErrorDetails, razorpayErrorStatus } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
@@ -39,10 +40,14 @@ export async function POST(request: Request) {
     const order = await razorpay.orders.fetch(body.razorpay_order_id);
     const planId = String(order.notes?.plan || "") as PlanId;
     const plan = getPlan(planId);
-    const expectedAmount = Math.round(Number(plan.monthlyPriceInr) * 100);
-    const expectedCurrency = (process.env.RAZORPAY_CHECKOUT_CURRENCY || "INR").trim().toUpperCase();
+    const expectedCurrency = String(order.currency || "").trim().toUpperCase();
+    const expectedPrice = planMonthlyPrice(plan, expectedCurrency);
+    const expectedAmount = expectedPrice && isPricingCurrency(expectedCurrency) ? priceInCurrencySubunits(expectedPrice, expectedCurrency) : 0;
     if (
       (planId !== "starter" && planId !== "growth") ||
+      !isPricingCurrency(expectedCurrency) ||
+      !expectedPrice ||
+      String(order.notes?.pricing_currency || "") !== expectedCurrency ||
       String(order.notes?.organization_id) !== context.organization.id ||
       Number(order.amount) !== expectedAmount ||
       order.currency !== expectedCurrency
