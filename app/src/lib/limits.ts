@@ -37,8 +37,13 @@ export async function enforceInboundRateLimit(endpointId: string) {
 
 export async function enforceMonthlyMessageLimit(projectId: string, incomingCount = 1) {
   const sql = requireSql();
-  const [account] = await sql`select o.id as organization_id, o.plan from projects p join organizations o on o.id = p.organization_id where p.id = ${projectId}`;
-  const limit = planLimits(String(account?.plan || "free")).messagesPerMonth;
+  const [account] = await sql`
+    select o.id as organization_id, o.plan,
+      case when o.temporary_limit_expires_at > now() then o.temporary_message_limit else null end as temporary_message_limit
+    from projects p join organizations o on o.id = p.organization_id where p.id = ${projectId}
+  `;
+  const planLimit = planLimits(String(account?.plan || "free")).messagesPerMonth;
+  const limit = account?.temporary_message_limit ? Number(account.temporary_message_limit) : planLimit;
   const [usage] = await sql`
     select (
       (select count(*) from messages m join projects p on p.id=m.project_id where p.organization_id=${account?.organization_id} and m.created_at >= date_trunc('month', now())) +

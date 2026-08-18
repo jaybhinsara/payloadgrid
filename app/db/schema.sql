@@ -70,6 +70,28 @@ create table if not exists organizations (
 alter table organizations add column if not exists suspended_at timestamptz;
 alter table organizations add column if not exists suspension_reason text;
 alter table organizations add column if not exists suspended_by uuid references users(id) on delete set null;
+alter table organizations add column if not exists delivery_paused_at timestamptz;
+alter table organizations add column if not exists delivery_pause_reason text;
+alter table organizations add column if not exists delivery_paused_by uuid references users(id) on delete set null;
+alter table organizations add column if not exists temporary_message_limit integer;
+alter table organizations add column if not exists temporary_limit_expires_at timestamptz;
+alter table organizations add column if not exists temporary_limit_reason text;
+do $$ begin
+  alter table organizations add constraint organizations_temporary_message_limit_check
+    check (temporary_message_limit is null or temporary_message_limit > 0);
+exception when duplicate_object then null;
+end $$;
+
+create table if not exists workspace_support_notes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  author_id uuid references users(id) on delete set null,
+  note text not null check (char_length(note) between 3 and 2000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists workspace_support_notes_organization_created_idx
+  on workspace_support_notes(organization_id, created_at desc);
 
 create table if not exists billing_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -298,6 +320,9 @@ alter table webhook_events add column if not exists dead_lettered_at timestamptz
 alter table webhook_events add column if not exists resolved_at timestamptz;
 alter table webhook_events add column if not exists resolved_by uuid references users(id) on delete set null;
 alter table webhook_events add column if not exists resolution_note text;
+alter table webhook_events add column if not exists support_archived_at timestamptz;
+alter table webhook_events add column if not exists support_archived_by uuid references users(id) on delete set null;
+alter table webhook_events add column if not exists support_archive_reason text;
 alter table webhook_events add column if not exists request_content_type text not null default 'application/json';
 alter table webhook_events add column if not exists request_raw_body text;
 alter table webhook_events add column if not exists contract_version integer;

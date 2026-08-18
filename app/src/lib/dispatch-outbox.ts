@@ -49,7 +49,7 @@ async function claimDispatchJobs(limit: number, eventId?: string) {
         and exists (
           select 1 from webhook_events e join endpoints ep on ep.id=e.endpoint_id
           join projects p on p.id=ep.project_id join organizations o on o.id=p.organization_id
-          where e.id=dispatch_jobs.event_id and o.suspended_at is null
+          where e.id=dispatch_jobs.event_id and o.suspended_at is null and o.delivery_paused_at is null
         )
       order by available_at asc, created_at asc
       for update skip locked
@@ -156,7 +156,7 @@ export async function recoverMissingDispatchJobs(limit = 100) {
       and exists (
         select 1 from endpoints ep join projects p on p.id=ep.project_id
         join organizations o on o.id=p.organization_id
-        where ep.id=e.endpoint_id and o.suspended_at is null
+        where ep.id=e.endpoint_id and o.suspended_at is null and o.delivery_paused_at is null
       )
     order by coalesce(e.next_retry_at, e.received_at) asc
     limit ${Math.min(Math.max(limit, 1), 500)}
