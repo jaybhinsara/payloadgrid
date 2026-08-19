@@ -67,6 +67,16 @@ test("markdown rendering does not enable raw HTML", async () => {
   for (const action of ["Heading 2", "Bold", "Italic", "Underline", "Link", "Bulleted list", "Numbered list", "Quote", "Code", "Divider"]) assert.match(toolbar, new RegExp(action));
 });
 
+test("blog task lists keep compact checkboxes aligned with their labels", async () => {
+  const [styles, markdown] = await Promise.all([read("src/app/globals.css"), read("src/components/blog/markdown-content.tsx")]);
+  assert.match(styles, /ul\.contains-task-list[^}]*list-style:\s*none/);
+  assert.match(styles, /\.task-list-item[^}]*display:\s*flex/);
+  assert.match(styles, /\.task-list-item input\[type="checkbox"\][^}]*width:\s*17px/);
+  assert.match(styles, /\.task-list-item input\[type="checkbox"\][^}]*min-height:\s*17px/);
+  assert.match(markdown, /defaultChecked=\{Boolean\(checked\)\}/);
+  assert.match(markdown, /disabled:\s*_disabled/);
+});
+
 test("publishing UI lives only in the separate platform admin", async () => {
   const [dashboard, editor] = await Promise.all([
     read("src/components/dashboard/dashboard-client.tsx"),

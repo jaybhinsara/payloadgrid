@@ -28,6 +28,7 @@ export function MarkdownContent({ content }: { content: string }) {
   return <div className="blog-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkUnderline]} components={{
     a: ({ href, children }) => <a href={href} rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}>{children}</a>,
     img: ({ src, alt }) => <img src={typeof src === "string" ? src : ""} alt={alt || ""} loading="lazy" />,
-    code: ({ children, className }) => <code className={className}>{children}</code>
+    code: ({ children, className }) => <code className={className}>{children}</code>,
+    input: ({ checked, disabled: _disabled, node: _node, ...props }) => <input {...props} defaultChecked={Boolean(checked)} aria-label="Checklist item" />
   }}>{content}</ReactMarkdown></div>;
 }

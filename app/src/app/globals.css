@@ -1198,6 +1198,9 @@ p { color: var(--muted); line-height: 1.6; }
 .blog-markdown p, .blog-markdown ul, .blog-markdown ol, .blog-markdown blockquote, .blog-markdown pre, .blog-markdown table { margin: 0 0 22px; }
 .blog-markdown ul, .blog-markdown ol { padding-left: 25px; }
 .blog-markdown li { margin: 7px 0; }
+.blog-markdown ul.contains-task-list { display: grid; gap: 10px; padding-left: 0; list-style: none; }
+.blog-markdown .task-list-item { display: flex; align-items: flex-start; gap: 11px; margin: 0; list-style: none; }
+.blog-markdown .task-list-item input[type="checkbox"] { width: 17px; height: 17px; min-height: 17px; flex: 0 0 17px; margin: 6px 0 0; padding: 0; accent-color: var(--coral); opacity: 1; cursor: pointer; }
 .blog-markdown a { color: #d93b2d; text-decoration: underline; text-underline-offset: 3px; }
 .blog-markdown blockquote { border-left: 3px solid var(--accent); padding: 14px 20px; background: #f4f6f2; color: #566068; }
 .blog-markdown pre { max-width: 100%; overflow-x: auto; border-radius: 5px; background: #171b21; padding: 20px; color: #e8edf1; font: 12px/1.7 var(--mono); }
