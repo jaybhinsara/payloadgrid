@@ -1,139 +1,125 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Copy, LoaderCircle, Play, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Clock3, Copy, Inbox, LoaderCircle, Radio, RefreshCw, Send } from "lucide-react";
 
 const presets = {
-  "payment.captured": { payload: { paymentId: "pay_demo_8921", amount: 9999, currency: "USD" } },
-  "order.completed": { payload: { orderId: "order_demo_184", status: "completed" } },
-  "invoice.payment_failed": { payload: { invoiceId: "inv_demo_204", attempt: 1 } }
+  "payment.captured": { paymentId: "pay_demo_8921", amount: 9999, currency: "USD" },
+  "order.completed": { orderId: "order_demo_184", status: "completed" },
+  "invoice.payment_failed": { invoiceId: "inv_demo_204", attempt: 1 },
 };
 
 type EventType = keyof typeof presets;
-type Phase = "accepted" | "verified" | "routed" | "failed" | "retrying" | "delivered";
-type TimelineStep = { state: Phase; label: string; detail: string };
+type InboxSession = { token: string; ingestUrl: string; expiresAt: string; maxRequests: number };
+type CapturedRequest = { id: string; method: string; content_type: string | null; headers: Record<string, string>; body_text: string; size_bytes: number; received_at: string };
+const STORAGE_KEY = "payloadgrid-playground-inbox";
 
-const scenarios: Record<EventType, (messageId: string) => TimelineStep[]> = {
-  "payment.captured": (messageId) => [
-    { state: "accepted", label: "Payment event recorded", detail: `202 · ${messageId}` },
-    { state: "routed", label: "Payment endpoint matched", detail: "subscription · payment.*" },
-    { state: "verified", label: "Payload signed", detail: "HMAC-SHA256 · v1" },
-    { state: "delivered", label: "Delivered on first attempt", detail: "200 · 184ms" }
-  ],
-  "order.completed": (messageId) => [
-    { state: "accepted", label: "Order event recorded", detail: `202 · ${messageId}` },
-    { state: "routed", label: "Order processor matched", detail: "subscription · order.*" },
-    { state: "verified", label: "Payload signed", detail: "HMAC-SHA256 · v1" },
-    { state: "delivered", label: "Accepted by destination", detail: "202 · 241ms" }
-  ],
-  "invoice.payment_failed": (messageId) => [
-    { state: "accepted", label: "Invoice event recorded", detail: `202 · ${messageId}` },
-    { state: "failed", label: "Billing endpoint unavailable", detail: "503 · 912ms" },
-    { state: "retrying", label: "Automatic retry scheduled", detail: "backoff · 1 minute" },
-    { state: "delivered", label: "Delivered after recovery", detail: "200 · attempt 2" }
-  ]
-};
-
-async function signature(secret: string, id: string, timestamp: string, body: string) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const value = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${id}.${timestamp}.${body}`));
-  return btoa(String.fromCharCode(...new Uint8Array(value)));
+function prettyBody(value: string) {
+  try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value || "(empty body)"; }
+}
+function expiresIn(value?: string) {
+  if (!value) return "";
+  const minutes = Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 60000));
+  return `${minutes} min left`;
 }
 
 export function WebhookPlayground() {
   const [eventType, setEventType] = useState<EventType>("payment.captured");
-  const [payload, setPayload] = useState(JSON.stringify(presets["payment.captured"].payload, null, 2));
-  const [messageId, setMessageId] = useState("msg_demo_01");
-  const [currentStep, setCurrentStep] = useState(-1);
-  const [running, setRunning] = useState(false);
-  const [signed, setSigned] = useState("");
-  const [copied, setCopied] = useState(false);
-  const timers = useRef<number[]>([]);
-  const timeline = useMemo(() => scenarios[eventType](messageId), [eventType, messageId]);
+  const [payload, setPayload] = useState(JSON.stringify(presets["payment.captured"], null, 2));
+  const [session, setSession] = useState<InboxSession | null>(null);
+  const [requests, setRequests] = useState<CapturedRequest[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [requestCount, setRequestCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState<"url" | "curl" | null>(null);
 
-  function clearTimers() {
-    timers.current.forEach((timer) => window.clearTimeout(timer));
-    timers.current = [];
-  }
-
-  useEffect(() => clearTimers, []);
-
-  function selectPreset(value: EventType) {
-    clearTimers();
-    setEventType(value);
-    setPayload(JSON.stringify(presets[value].payload, null, 2));
-    setMessageId("msg_demo_01");
-    setCurrentStep(-1);
-    setRunning(false);
-    setSigned("");
-  }
-
-  async function run() {
+  const createInbox = useCallback(async () => {
+    setLoading(true); setError("");
     try {
-      JSON.parse(payload);
-    } catch {
-      setCurrentStep(-1);
-      return;
-    }
+      const response = await fetch("/api/playground/inboxes", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to create an inbox");
+      const next = result as InboxSession;
+      setSession(next); setRequests([]); setSelectedId(null); setRequestCount(0);
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create an inbox"); }
+    finally { setLoading(false); }
+  }, []);
 
-    clearTimers();
-    setRunning(true);
-    const id = `msg_demo_${Date.now().toString(36)}`;
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const steps = scenarios[eventType](id);
+  const refreshInbox = useCallback(async (activeSession: InboxSession, quiet = false) => {
+    try {
+      const response = await fetch(`/api/playground/inboxes/${activeSession.token}`, { cache: "no-store" });
+      const result = await response.json();
+      if (response.status === 410 || response.status === 404) {
+        window.sessionStorage.removeItem(STORAGE_KEY);
+        await createInbox();
+        return;
+      }
+      if (!response.ok) throw new Error(result.error || "Unable to refresh this inbox");
+      const nextRequests = result.requests as CapturedRequest[];
+      setRequests(nextRequests); setRequestCount(Number(result.requestCount || 0));
+      setSelectedId((current) => current && nextRequests.some((item) => item.id === current) ? current : nextRequests[0]?.id || null);
+      setError("");
+    } catch (cause) { if (!quiet) setError(cause instanceof Error ? cause.message : "Unable to refresh this inbox"); }
+  }, [createInbox]);
 
-    setMessageId(id);
-    setSigned(`v1,${await signature("whsec_demo_only", id, timestamp, payload)}`);
-    setCurrentStep(0);
+  useEffect(() => {
+    const saved = window.sessionStorage.getItem(STORAGE_KEY);
+    if (!saved) { void createInbox(); return; }
+    try {
+      const parsed = JSON.parse(saved) as InboxSession;
+      setSession(parsed);
+      void refreshInbox(parsed).finally(() => setLoading(false));
+    } catch { window.sessionStorage.removeItem(STORAGE_KEY); void createInbox(); }
+  }, [createInbox, refreshInbox]);
 
-    steps.slice(1).forEach((_, index) => {
-      const step = index + 1;
-      timers.current.push(window.setTimeout(() => {
-        setCurrentStep(step);
-        if (step === steps.length - 1) setRunning(false);
-      }, step * 550));
-    });
+  useEffect(() => {
+    if (!session) return;
+    const timer = window.setInterval(() => void refreshInbox(session, true), 2000);
+    return () => window.clearInterval(timer);
+  }, [refreshInbox, session]);
+
+  const selected = requests.find((item) => item.id === selectedId) || null;
+  const curl = useMemo(() => session ? `curl -X POST '${session.ingestUrl}' \\\n+  -H 'Content-Type: application/json' \\\n+  -H 'X-Event-Type: ${eventType}' \\\n+  --data-raw '${payload.replaceAll("'", "'\\''")}'` : "", [eventType, payload, session]);
+
+  function selectPreset(value: EventType) { setEventType(value); setPayload(JSON.stringify(presets[value], null, 2)); }
+  async function sendSample() {
+    if (!session) return;
+    try { JSON.parse(payload); } catch { setError("The sample body must contain valid JSON."); return; }
+    setSending(true); setError("");
+    try {
+      const response = await fetch(session.ingestUrl, { method: "POST", headers: { "Content-Type": "application/json", "X-Event-Type": eventType, "X-Request-Id": crypto.randomUUID() }, body: payload });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `Request failed with HTTP ${response.status}`);
+      await refreshInbox(session);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "The sample request failed"); }
+    finally { setSending(false); }
+  }
+  async function copy(value: string, kind: "url" | "curl") {
+    await navigator.clipboard.writeText(value); setCopied(kind); window.setTimeout(() => setCopied(null), 1400);
   }
 
-  async function copySignature() {
-    await navigator.clipboard.writeText(signed);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }
-
-  const phase = currentStep >= 0 ? timeline[currentStep].state : "idle";
-
-  return <div className="playground-grid">
-    <section className="playground-editor">
-      <div className="playground-toolbar"><span>LOCAL EVENT</span><em>No network request</em></div>
-      <label>Event type
-        <select value={eventType} onChange={(event) => selectPreset(event.target.value as EventType)} disabled={running}>
-          {Object.keys(presets).map((key) => <option key={key}>{key}</option>)}
-        </select>
-      </label>
-      <label>JSON payload
-        <textarea value={payload} onChange={(event) => setPayload(event.target.value)} spellCheck={false} disabled={running} />
-      </label>
-      <button className="button primary large" onClick={run} disabled={running}>
-        {running ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />} Run delivery simulation
-      </button>
-    </section>
-    <section className="playground-output">
-      <div className="playground-toolbar"><span>DELIVERY LIFECYCLE</span><em className={phase === "delivered" ? "done" : ""}>{phase}</em></div>
-      <div className="simulation-timeline">
-        {timeline.map((item, index) => {
-          const reached = index <= currentStep;
-          return <article className={reached ? `reached ${item.state}` : ""} key={`${item.state}-${index}`}>
-            <span>{!reached ? index + 1 : item.state === "failed" ? <TriangleAlert size={15} /> : item.state === "retrying" ? <RefreshCw size={15} /> : <CheckCircle2 size={16} />}</span>
-            <div><strong>{item.label}</strong><small>{item.detail}</small></div>
-          </article>;
-        })}
-      </div>
-      <div className="signature-preview">
-        <div><ShieldCheck size={17} /><strong>PayloadGrid signature</strong>{signed ? <button className="icon-button" onClick={copySignature} title="Copy signature"><Copy size={14} /></button> : null}</div>
-        <code>{signed || "Run the simulation to sign this payload."}</code>
-        {copied ? <span>Copied</span> : null}
-      </div>
-    </section>
+  return <div className="live-playground">
+    <header className="playground-inbox-bar">
+      <div><span className="playground-live"><Radio size={14} /> LIVE INBOX</span><strong>{loading ? "Creating a secure temporary URL..." : session?.ingestUrl || "Inbox unavailable"}</strong>{session ? <small><Clock3 size={12} /> {expiresIn(session.expiresAt)} · {requestCount}/{session.maxRequests} requests</small> : null}</div>
+      <div><button className="button compact" type="button" disabled={!session} onClick={() => session && void copy(session.ingestUrl, "url")}>{copied === "url" ? <Check size={15} /> : <Copy size={15} />} {copied === "url" ? "Copied" : "Copy URL"}</button><button className="icon-button" type="button" title="Create a new inbox" onClick={() => void createInbox()} disabled={loading}><RefreshCw size={16} /></button></div>
+    </header>
+    {error ? <div className="playground-error">{error}</div> : null}
+    <div className="playground-grid playground-live-grid">
+      <section className="playground-editor">
+        <div className="playground-toolbar"><span>REQUEST BUILDER</span><em>real HTTP POST</em></div>
+        <label>Event type<select value={eventType} onChange={(event) => selectPreset(event.target.value as EventType)} disabled={sending}>{Object.keys(presets).map((key) => <option key={key}>{key}</option>)}</select></label>
+        <label>JSON payload<textarea value={payload} onChange={(event) => setPayload(event.target.value)} spellCheck={false} disabled={sending} /></label>
+        <button className="button primary large" onClick={() => void sendSample()} disabled={sending || loading || !session}>{sending ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />} Send real test webhook</button>
+        <div className="playground-curl"><div><span>RUN FROM YOUR TERMINAL</span><button type="button" onClick={() => void copy(curl, "curl")} title="Copy cURL"><Copy size={14} /></button></div><pre>{curl || "Creating endpoint..."}</pre></div>
+      </section>
+      <section className="playground-output">
+        <div className="playground-toolbar"><span>CAPTURED REQUESTS</span><em>{requests.length ? `${requests.length} received` : "listening"}</em></div>
+        {requests.length ? <><div className="playground-request-list">{requests.map((item) => <button type="button" className={item.id === selectedId ? "selected" : ""} key={item.id} onClick={() => setSelectedId(item.id)}><span>{item.method}</span><strong>{item.headers["x-event-type"] || item.content_type || "webhook"}</strong><time>{new Date(item.received_at).toLocaleTimeString()}</time></button>)}</div>{selected ? <div className="playground-inspector"><div><span>HTTP request captured</span><strong>202 Accepted</strong></div><dl><div><dt>Content type</dt><dd>{selected.content_type || "Not provided"}</dd></div><div><dt>Body size</dt><dd>{selected.size_bytes.toLocaleString()} bytes</dd></div></dl><details open><summary>Request body</summary><pre>{prettyBody(selected.body_text)}</pre></details><details><summary>Safe request headers</summary><pre>{JSON.stringify(selected.headers, null, 2)}</pre></details></div> : null}</> : <div className="playground-waiting"><Inbox size={28} /><strong>Waiting for a webhook</strong><p>Send the sample request or POST to the temporary URL from any HTTP client. New requests appear here automatically.</p></div>}
+      </section>
+    </div>
+    <footer className="playground-privacy">Temporary playground data expires automatically. Authorization, cookie, and other sensitive headers are never retained.</footer>
   </div>;
 }

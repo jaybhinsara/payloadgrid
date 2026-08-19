@@ -34,6 +34,7 @@ export async function GET(request: Request) {
     await sql`update endpoints set previous_signing_secret = null, previous_signing_secret_expires_at = null where previous_signing_secret_expires_at <= now()`;
     await sql`delete from sessions where expires_at <= now()`;
     await sql`delete from oauth_states where expires_at <= now()`;
+    const expiredPlaygroundInboxes = await sql`delete from playground_inboxes where expires_at <= now() returning id`;
     const expiredPlans = await sql`
       with expired_subscriptions as (
         update billing_subscriptions set status = 'expired', updated_at = now()
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       where o.id = s.organization_id and o.plan = s.plan
       returning o.id
     `;
-    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0), expiredPlans: expiredPlans.length });
+    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0), expiredPlaygroundInboxes: expiredPlaygroundInboxes.length, expiredPlans: expiredPlans.length });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Maintenance failed" }, { status: 500 });
   }

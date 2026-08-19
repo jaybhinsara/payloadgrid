@@ -645,3 +645,27 @@ create index if not exists service_checks_run_checked_at_idx on service_checks(r
 create index if not exists incidents_started_at_idx on incidents(started_at desc);
 create unique index if not exists incidents_one_open_per_service_idx on incidents(service) where status <> 'resolved';
 create index if not exists incident_updates_incident_created_at_idx on incident_updates(incident_id, created_at asc);
+
+create table if not exists playground_inboxes (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  creator_ip_hash text not null,
+  request_count integer not null default 0 check (request_count >= 0),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists playground_requests (
+  id uuid primary key default gen_random_uuid(),
+  inbox_id uuid not null references playground_inboxes(id) on delete cascade,
+  method text not null,
+  content_type text,
+  headers jsonb not null default '{}'::jsonb,
+  body_text text not null default '',
+  size_bytes integer not null default 0 check (size_bytes >= 0),
+  received_at timestamptz not null default now()
+);
+
+create index if not exists playground_inboxes_expires_at_idx on playground_inboxes(expires_at);
+create index if not exists playground_inboxes_creator_created_at_idx on playground_inboxes(creator_ip_hash, created_at desc);
+create index if not exists playground_requests_inbox_received_at_idx on playground_requests(inbox_id, received_at desc);
