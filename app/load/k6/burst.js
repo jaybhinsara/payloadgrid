@@ -54,7 +54,7 @@ export default function () {
     if (response.status === 429) rateLimited.add(1);
     if (response.status >= 500) serverErrors.add(1);
     if (!response.status) transportErrors.add(1);
-    if (loggedFailureSamples < 3) {
+    if (__VU <= 3 && loggedFailureSamples < 1) {
       console.error(`Rejected burst request: status=${response.status || 0} body=${String(response.body || "").slice(0, 300)}`);
       loggedFailureSamples += 1;
     }

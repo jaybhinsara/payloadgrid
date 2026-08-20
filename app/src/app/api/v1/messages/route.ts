@@ -20,7 +20,16 @@ export async function POST(request: Request) {
     const result = await acceptMessage({ projectId: key.projectId, applicationId: body.applicationId, eventType: body.eventType, payload: body.payload, idempotencyKey: request.headers.get("idempotency-key") });
     return NextResponse.json({ ok: true, ...result }, { status: result.duplicate ? 200 : 202, headers: { "cache-control": "no-store" } });
   } catch (error) {
-    const status = error instanceof UsageLimitError ? error.status : 400;
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Message acceptance failed" }, { status });
+    if (error instanceof UsageLimitError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof SyntaxError || error instanceof z.ZodError) {
+      return NextResponse.json({ ok: false, error: "Message body is invalid" }, { status: 400 });
+    }
+    console.error("Message acceptance failed", error);
+    return NextResponse.json({ ok: false, error: "Message acceptance is temporarily unavailable" }, {
+      status: 503,
+      headers: { "retry-after": "5", "cache-control": "no-store" }
+    });
   }
 }

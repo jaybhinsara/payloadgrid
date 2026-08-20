@@ -8,6 +8,7 @@ const schema = await readFile(new URL("../db/schema.sql", import.meta.url), "utf
 const outbound = await readFile(new URL("../src/lib/outbound.ts", import.meta.url), "utf8");
 const outbox = await readFile(new URL("../src/lib/dispatch-outbox.ts", import.meta.url), "utf8");
 const worker = await readFile(new URL("../src/lib/delivery-worker.ts", import.meta.url), "utf8");
+const messages = await readFile(new URL("../src/app/api/v1/messages/route.ts", import.meta.url), "utf8");
 const batch = await readFile(new URL("../src/app/api/v1/messages/batch/route.ts", import.meta.url), "utf8");
 const relay = await readFile(new URL("../src/app/api/v1/relay/events/route.ts", import.meta.url), "utf8");
 const embedToken = await readFile(new URL("../src/app/api/v1/embed-token/route.ts", import.meta.url), "utf8");
@@ -18,6 +19,13 @@ test("message acceptance commits fan-out and dispatch intent together", () => {
   assert.match(outbound, /insert into webhook_events/);
   assert.match(outbound, /insert into dispatch_jobs/);
   assert.doesNotMatch(outbound, /enqueueDelivery/);
+});
+
+test("message acceptance distinguishes invalid requests from temporary infrastructure failures", () => {
+  assert.match(messages, /error instanceof SyntaxError \|\| error instanceof z\.ZodError/);
+  assert.match(messages, /status: 503/);
+  assert.match(messages, /"retry-after": "5"/);
+  assert.doesNotMatch(messages, /error instanceof Error \? error\.message : "Message acceptance failed"/);
 });
 
 test("embedded portal tokens require a dedicated scope and project-bound application", () => {
