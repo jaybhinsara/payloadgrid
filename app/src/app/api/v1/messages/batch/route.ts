@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateApiKey } from "@/lib/api-auth";
-import { enforceApiRateLimit, enforceMonthlyMessageLimit, UsageLimitError } from "@/lib/limits";
+import { enforceApiRateLimit, enforceMonthlyMessageLimit, UsageLimitError, usageLimitHeaders } from "@/lib/limits";
 import { acceptMessage } from "@/lib/outbound";
 import { assertPayloadSize, MAX_BATCH_BODY_BYTES, MAX_BATCH_EVENTS } from "@/lib/payload-limits";
 
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     }, { status: 202, headers: { "cache-control": "no-store" } });
   } catch (error) {
     const status = error instanceof UsageLimitError ? error.status : error instanceof SyntaxError || error instanceof z.ZodError ? 400 : 500;
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Batch acceptance failed" }, { status });
+    const headers = error instanceof UsageLimitError ? usageLimitHeaders(error) : { "cache-control": "no-store" };
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Batch acceptance failed" }, { status, headers });
   }
 }

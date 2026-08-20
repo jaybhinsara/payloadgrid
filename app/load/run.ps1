@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("baseline", "limit", "batch", "inbound", "sustained", "burst", "failure", "recovery")]
+  [ValidateSet("baseline", "limit", "batch", "inbound", "sustained", "starter-burst", "burst", "failure", "recovery")]
   [string]$Profile = "baseline",
   [Parameter(Mandatory = $true)]
   [string]$BaseUrl,
@@ -24,6 +24,9 @@ $config = switch ($Profile) {
   "batch" { @{ Rate = 2; Duration = "1m"; BatchSize = 25; Script = "batch.js" } }
   "inbound" { @{ Rate = 2; Duration = "2m"; BatchSize = 1; Script = "inbound.js" } }
   "sustained" { @{ Rate = 10; Duration = "10m"; BatchSize = 1; Script = "messages.js" } }
+  # A plan-aware burst that remains below Starter's 1,000 requests/minute
+  # while still exercising concurrent acceptance.
+  "starter-burst" { @{ Rate = 15; Duration = "2m"; BatchSize = 1; Script = "burst.js"; EstimatedEvents = 960 } }
   # burst.js ramps 5/s -> 50/s -> 5/s over two minutes. Its staged
   # arrival-rate area schedules approximately 3,300 iterations.
   "burst" { @{ Rate = 50; Duration = "2m"; BatchSize = 1; Script = "burst.js"; EstimatedEvents = 3300 } }

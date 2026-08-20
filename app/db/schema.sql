@@ -448,6 +448,25 @@ create table if not exists endpoint_usage_windows (
   request_count integer not null default 0,
   primary key (endpoint_id, window_start)
 );
+
+create table if not exists api_usage_window_buckets (
+  api_key_id uuid not null references api_keys(id) on delete cascade,
+  window_start timestamptz not null,
+  bucket smallint not null check (bucket between 0 and 15),
+  request_count integer not null default 0 check (request_count >= 0),
+  primary key (api_key_id, window_start, bucket)
+);
+
+create table if not exists endpoint_usage_window_buckets (
+  endpoint_id uuid not null references endpoints(id) on delete cascade,
+  window_start timestamptz not null,
+  bucket smallint not null check (bucket between 0 and 15),
+  request_count integer not null default 0 check (request_count >= 0),
+  primary key (endpoint_id, window_start, bucket)
+);
+
+create index if not exists api_usage_window_buckets_window_idx on api_usage_window_buckets(window_start);
+create index if not exists endpoint_usage_window_buckets_window_idx on endpoint_usage_window_buckets(window_start);
 create table if not exists transformations (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects(id) on delete cascade,

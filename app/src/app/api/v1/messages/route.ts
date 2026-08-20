@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateApiKey } from "@/lib/api-auth";
-import { enforceApiRateLimit, enforceMonthlyMessageLimit, UsageLimitError } from "@/lib/limits";
+import { enforceApiRateLimit, enforceMonthlyMessageLimit, UsageLimitError, usageLimitHeaders } from "@/lib/limits";
 import { acceptMessage } from "@/lib/outbound";
 import { assertPayloadSize } from "@/lib/payload-limits";
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...result }, { status: result.duplicate ? 200 : 202, headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof UsageLimitError) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status, headers: usageLimitHeaders(error) });
     }
     if (error instanceof SyntaxError || error instanceof z.ZodError) {
       return NextResponse.json({ ok: false, error: "Message body is invalid" }, { status: 400 });

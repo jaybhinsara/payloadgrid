@@ -4,7 +4,7 @@ import { amountFromPayload, eventTypeFromPayload, providerEventIdFromPayload, sa
 import { evaluateCircuitBreaker, notifyCircuitOpened } from "@/lib/circuit-breaker";
 import { requireSql } from "@/lib/db";
 import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
-import { enforceInboundRateLimit, enforceMonthlyMessageLimit, planLimits, UsageLimitError } from "@/lib/limits";
+import { enforceInboundRateLimit, enforceMonthlyMessageLimit, planLimits, UsageLimitError, usageLimitHeaders } from "@/lib/limits";
 import { parseInboundBody } from "@/lib/inbound-content";
 import { verifyProviderWebhook } from "@/lib/provider-verification";
 import { queueConfigured } from "@/lib/queue";
@@ -83,6 +83,7 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
     return NextResponse.json({ ok: true, eventId: event.id, status: "accepted", verified: verification.verified, queueConfigured: queueConfigured(), contractVersion: validation.contractVersion, validationWarnings: validation.warnings }, { status: 200, headers: { "x-payloadgrid-event-id": String(event.id) } });
   } catch (error) {
     const status = error instanceof UsageLimitError ? error.status : 500;
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Webhook ingest failed" }, { status });
+    const headers = error instanceof UsageLimitError ? usageLimitHeaders(error) : { "cache-control": "no-store" };
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Webhook ingest failed" }, { status, headers });
   }
 }

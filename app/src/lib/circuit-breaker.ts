@@ -14,15 +14,18 @@ export async function evaluateCircuitBreaker(endpoint: CircuitEndpoint) {
   if (!endpoint.enabled || endpoint.state === "open") return { open: endpoint.state === "open", newlyOpened: false };
   const sql = requireSql();
   const [sample] = await sql`
+    with minute_totals as (
+      select window_start, sum(request_count)::int as request_count
+      from endpoint_usage_window_buckets
+      where endpoint_id = ${endpoint.id}
+        and window_start >= date_trunc('minute', now()) - interval '30 minutes'
+      group by window_start
+    )
     select
-      coalesce((select request_count from endpoint_usage_windows where endpoint_id = ${endpoint.id}
-        and window_start = date_trunc('minute', now())), 0)::int as current_count,
-      coalesce(avg(request_count), 0)::numeric as baseline_average,
-      coalesce(stddev_pop(request_count), 0)::numeric as baseline_deviation
-    from endpoint_usage_windows
-    where endpoint_id = ${endpoint.id}
-      and window_start >= date_trunc('minute', now()) - interval '30 minutes'
-      and window_start < date_trunc('minute', now())
+      coalesce(max(request_count) filter (where window_start = date_trunc('minute', now())), 0)::int as current_count,
+      coalesce(avg(request_count) filter (where window_start < date_trunc('minute', now())), 0)::numeric as baseline_average,
+      coalesce(stddev_pop(request_count) filter (where window_start < date_trunc('minute', now())), 0)::numeric as baseline_deviation
+    from minute_totals
   `;
   const current = Number(sample.current_count || 0);
   const average = Number(sample.baseline_average || 0);

@@ -18,15 +18,16 @@ Every console API resolves the current session and project on the server. Resour
 1. A customer backend calls `POST /api/v1/messages` with a PayloadGrid API key.
 2. PayloadGrid hashes the supplied key and resolves its project.
 3. The authenticated key lookup also resolves plan limits; key activity timestamps are written at most once every five minutes per warm runtime.
-4. A bounded 16-bucket monthly ledger enforces accepted-event capacity without scanning retained message and webhook tables.
-5. Application ownership, active transformations, and the published event contract are loaded together. Transformations and non-blocking contract validation run before acceptance.
-6. An idempotency key prevents duplicate messages.
-7. One database transaction stores the message, creates every matching endpoint delivery, and inserts one dispatch outbox row per delivery.
-8. The API returns `202 Accepted`; a background dispatcher publishes pending outbox rows to QStash.
-9. Each worker atomically claims a delivery and signs its exact outgoing body.
-10. The response, headers, status, body, error, and latency are stored.
-11. A failed attempt and its delayed retry outbox row commit together.
-12. Alert rules are evaluated against failures in their configured time window.
+4. Per-minute API-key and inbound-endpoint limits use 16 counter buckets to avoid serializing concurrent requests on one database row. The response includes `Retry-After` when a fixed minute window is exhausted.
+5. A bounded 16-bucket monthly ledger enforces accepted-event capacity without scanning retained message and webhook tables.
+6. Application ownership, active transformations, and the published event contract are loaded together. Transformations and non-blocking contract validation run before acceptance.
+7. An idempotency key prevents duplicate messages.
+8. One database transaction stores the message, creates every matching endpoint delivery, and inserts one dispatch outbox row per delivery.
+9. The API returns `202 Accepted`; a background dispatcher publishes pending outbox rows to QStash.
+10. Each worker atomically claims a delivery and signs its exact outgoing body.
+11. The response, headers, status, body, error, and latency are stored.
+12. A failed attempt and its delayed retry outbox row commit together.
+13. Alert rules are evaluated against failures in their configured time window.
 
 ## Inbound sequence
 

@@ -9,7 +9,7 @@ const serverErrors = new Counter("payloadgrid_burst_server_errors");
 const transportErrors = new Counter("payloadgrid_burst_transport_errors");
 const latency = new Trend("payloadgrid_burst_latency", true);
 const peak = Number(__ENV.RATE || 50);
-let loggedFailureSamples = 0;
+let loggedRateLimitSample = false;
 
 export function setup() {
   for (const name of ["BASE_URL", "API_KEY", "APPLICATION_ID", "LOAD_RUN_ID"]) {
@@ -51,12 +51,18 @@ export default function () {
   latency.add(response.timings.duration);
   if (!ok) {
     rejected.add(1, { status: String(response.status || 0) });
-    if (response.status === 429) rateLimited.add(1);
-    if (response.status >= 500) serverErrors.add(1);
-    if (!response.status) transportErrors.add(1);
-    if (__VU <= 3 && loggedFailureSamples < 1) {
-      console.error(`Rejected burst request: status=${response.status || 0} body=${String(response.body || "").slice(0, 300)}`);
-      loggedFailureSamples += 1;
+    if (response.status === 429) {
+      rateLimited.add(1);
+      if (__VU <= 3 && !loggedRateLimitSample) {
+        console.warn(`Rate-limited burst request: status=429 retry-after=${response.headers["Retry-After"] || "missing"}`);
+        loggedRateLimitSample = true;
+      }
+    } else if (response.status >= 500) {
+      serverErrors.add(1);
+      console.error(`Burst server error: status=${response.status} body=${String(response.body || "").slice(0, 300)}`);
+    } else if (!response.status) {
+      transportErrors.add(1);
+      console.error(`Burst transport error: error=${String(response.error || "unknown").slice(0, 300)}`);
     }
   }
 }
