@@ -15,7 +15,8 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("pause"), reason: z.string().trim().min(3).max(500) }),
   z.object({ action: z.literal("resume"), reason: z.string().trim().min(3).max(500) }),
   z.object({ action: z.literal("set_capacity"), reason: z.string().trim().min(3).max(500), messageLimit: z.number().int().positive().max(100_000_000), expiresAt: z.string().datetime() }),
-  z.object({ action: z.literal("clear_capacity"), reason: z.string().trim().min(3).max(500) })
+  z.object({ action: z.literal("clear_capacity"), reason: z.string().trim().min(3).max(500) }),
+  z.object({ action: z.literal("set_delivery_limits"), reason: z.string().trim().min(3).max(500), ratePerMinute: z.number().int().min(1).max(1_000_000), parallelism: z.number().int().min(1).max(1_000) })
 ]);
 const noteSchema = z.object({ note: z.string().trim().min(3).max(2000) });
 
@@ -23,6 +24,7 @@ async function getWorkspace(workspaceId: string) {
   const sql = requireSql();
   const [workspace] = await sql`
     select o.id, o.name, o.slug, o.plan, o.delivery_paused_at, o.delivery_pause_reason,
+      o.delivery_rate_per_minute, o.delivery_parallelism,
       case when o.temporary_limit_expires_at > now() then o.temporary_message_limit else null end as temporary_message_limit,
       case when o.temporary_limit_expires_at > now() then o.temporary_limit_expires_at else null end as temporary_limit_expires_at,
       case when o.temporary_limit_expires_at > now() then o.temporary_limit_reason else null end as temporary_limit_reason,
@@ -43,6 +45,9 @@ export async function GET(_request: Request, contextValue: RouteContext) {
     const sql = requireSql();
     const [queue, notes] = await Promise.all([
       sql`select count(*) filter (where e.status in ('queued','buffered','processing','received','retrying'))::int as pending, count(*) filter (where e.status='dead_letter' and e.resolved_at is null)::int as dead_letter, min(e.received_at) filter (where e.status in ('queued','buffered','processing','received','retrying')) as oldest_pending,
+        (select count(*)::int from dispatch_jobs j join webhook_events je on je.id=j.event_id join endpoints jep on jep.id=je.endpoint_id join projects jp on jp.id=jep.project_id where jp.organization_id=${workspaceId} and j.status in ('pending','publishing')) as pending_dispatch,
+        (select min(j.created_at) from dispatch_jobs j join webhook_events je on je.id=j.event_id join endpoints jep on jep.id=je.endpoint_id join projects jp on jp.id=jep.project_id where jp.organization_id=${workspaceId} and j.status in ('pending','publishing')) as oldest_dispatch,
+        (select count(*)::int from dispatch_jobs j join webhook_events je on je.id=j.event_id join endpoints jep on jep.id=je.endpoint_id join projects jp on jp.id=jep.project_id where jp.organization_id=${workspaceId} and j.last_error is not null and j.updated_at >= now() - interval '1 hour') as dispatch_errors_last_hour,
         ((select count(*) from messages m join projects mp on mp.id=m.project_id where mp.organization_id=${workspaceId} and m.created_at >= date_trunc('month', now())) +
          (select count(*) from webhook_events ie join endpoints iep on iep.id=ie.endpoint_id join projects ip on ip.id=iep.project_id where ip.organization_id=${workspaceId} and ie.direction='inbound' and ie.is_simulation=false and ie.received_at >= date_trunc('month', now())))::int as accepted_events
         from webhook_events e join endpoints ep on ep.id=e.endpoint_id join projects p on p.id=ep.project_id where p.organization_id=${workspaceId}`,
@@ -77,7 +82,8 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
       await sql`update organizations set temporary_message_limit=${body.messageLimit}, temporary_limit_expires_at=${body.expiresAt}, temporary_limit_reason=${body.reason}, updated_at=now() where id=${workspaceId}`;
     }
     if (body.action === "clear_capacity") await sql`update organizations set temporary_message_limit=null, temporary_limit_expires_at=null, temporary_limit_reason=null, updated_at=now() where id=${workspaceId}`;
-    const detail = { reason: body.reason, messageLimit: body.action === "set_capacity" ? body.messageLimit : null, expiresAt: body.action === "set_capacity" ? body.expiresAt : null };
+    if (body.action === "set_delivery_limits") await sql`update organizations set delivery_rate_per_minute=${body.ratePerMinute}, delivery_parallelism=${body.parallelism}, updated_at=now() where id=${workspaceId}`;
+    const detail = { reason: body.reason, messageLimit: body.action === "set_capacity" ? body.messageLimit : null, expiresAt: body.action === "set_capacity" ? body.expiresAt : null, ratePerMinute: body.action === "set_delivery_limits" ? body.ratePerMinute : null, parallelism: body.action === "set_delivery_limits" ? body.parallelism : null };
     await Promise.all([
       writePlatformAudit(context.user.id, `support.workspace.${body.action}`, "organization", workspaceId, detail),
       writeAudit(workspaceId, context.user.id, `support.workspace.${body.action}`, "organization", workspaceId, detail)

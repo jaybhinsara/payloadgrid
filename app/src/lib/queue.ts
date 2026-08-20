@@ -4,9 +4,11 @@ import { appUrl } from "@/lib/constants";
 export type QueueDeliveryInput = {
   eventId: string;
   endpointId: string;
+  workspaceId: string;
   attempt: number;
   delaySeconds?: number;
-  rateLimitPerMinute?: number;
+  workspaceRateLimitPerMinute?: number;
+  workspaceParallelism?: number;
   deduplicationId?: string;
 };
 
@@ -32,11 +34,11 @@ export async function enqueueDelivery(input: QueueDeliveryInput) {
     retries: 3,
     retryDelay: "max(1000, pow(2, retried) * 1000)",
     timeout: "30s",
-    label: ["payloadgrid-delivery", `endpoint-${input.endpointId}`],
+    label: ["payloadgrid-delivery", `workspace-${input.workspaceId}`, `endpoint-${input.endpointId}`],
     flowControl: {
-      key: `endpoint-${input.endpointId}`,
-      parallelism: 5,
-      rate: Math.max(1, input.rateLimitPerMinute || 120),
+      key: `workspace-${input.workspaceId}`,
+      parallelism: Math.max(1, input.workspaceParallelism || 10),
+      rate: Math.max(1, input.workspaceRateLimitPerMinute || 600),
       period: "1m"
     },
     redact: { body: true }

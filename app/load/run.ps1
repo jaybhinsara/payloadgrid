@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("baseline", "limit", "batch", "inbound")]
+  [ValidateSet("baseline", "limit", "batch", "inbound", "sustained", "burst", "failure", "recovery")]
   [string]$Profile = "baseline",
   [Parameter(Mandatory = $true)]
   [string]$BaseUrl,
@@ -8,7 +8,9 @@ param(
   [string]$EndpointId,
   [switch]$IsolatedProject,
   [string]$Approval,
-  [int]$MaxEvents = 10000
+  [int]$MaxEvents = 10000,
+  [string]$EvidenceDatabaseUrl,
+  [int]$EvidenceWaitSeconds = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,6 +23,10 @@ $config = switch ($Profile) {
   "limit" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
   "batch" { @{ Rate = 2; Duration = "1m"; BatchSize = 25; Script = "batch.js" } }
   "inbound" { @{ Rate = 2; Duration = "2m"; BatchSize = 1; Script = "inbound.js" } }
+  "sustained" { @{ Rate = 10; Duration = "10m"; BatchSize = 1; Script = "messages.js" } }
+  "burst" { @{ Rate = 50; Duration = "3m"; BatchSize = 1; Script = "burst.js" } }
+  "failure" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
+  "recovery" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
 }
 
 if ($Profile -eq "inbound") {
@@ -52,7 +58,9 @@ $prefix = Join-Path $results "$stamp-$Profile"
 $summary = "$prefix-summary.json"
 $console = "$prefix-console.txt"
 $metadata = "$prefix-metadata.json"
+$evidence = "$prefix-delivery-evidence.json"
 $script = Join-Path $PSScriptRoot "k6\$($config.Script)"
+$runId = "load-$stamp-$Profile"
 
 @{
   profile = $Profile
@@ -63,6 +71,7 @@ $script = Join-Path $PSScriptRoot "k6\$($config.Script)"
   duration = $config.Duration
   batchSize = $config.BatchSize
   estimatedEvents = $estimatedEvents
+  runId = $runId
   startedAt = (Get-Date).ToUniversalTime().ToString("o")
 } | ConvertTo-Json | Set-Content -LiteralPath $metadata
 
@@ -73,6 +82,8 @@ $env:ENDPOINT_ID = $EndpointId
 $env:RATE = [string]$config.Rate
 $env:DURATION = $config.Duration
 $env:BATCH_SIZE = [string]$config.BatchSize
+$env:LOAD_RUN_ID = $runId
+$env:LOAD_SCENARIO = $Profile
 
 try {
   & $k6Path run --summary-export $summary $script 2>&1 | Tee-Object -FilePath $console
@@ -85,9 +96,25 @@ try {
   Remove-Item Env:RATE -ErrorAction SilentlyContinue
   Remove-Item Env:DURATION -ErrorAction SilentlyContinue
   Remove-Item Env:BATCH_SIZE -ErrorAction SilentlyContinue
+  Remove-Item Env:LOAD_RUN_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:LOAD_SCENARIO -ErrorAction SilentlyContinue
+}
+
+if ($EvidenceDatabaseUrl -and $exitCode -eq 0) {
+  if ($EvidenceWaitSeconds -gt 0) { Start-Sleep -Seconds $EvidenceWaitSeconds }
+  $env:LOAD_EVIDENCE_DATABASE_URL = $EvidenceDatabaseUrl
+  $env:LOAD_RUN_ID = $runId
+  $env:LOAD_EVIDENCE_FILE = $evidence
+  try { node (Join-Path $PSScriptRoot "evidence.mjs") }
+  finally {
+    Remove-Item Env:LOAD_EVIDENCE_DATABASE_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:LOAD_RUN_ID -ErrorAction SilentlyContinue
+    Remove-Item Env:LOAD_EVIDENCE_FILE -ErrorAction SilentlyContinue
+  }
 }
 
 Write-Host "Recorded summary: $summary"
 Write-Host "Recorded console: $console"
 Write-Host "Recorded metadata: $metadata"
+if (Test-Path -LiteralPath $evidence) { Write-Host "Recorded delivery evidence: $evidence" }
 exit $exitCode

@@ -13,8 +13,8 @@ type Delivery = {
 };
 type DeliveryDetail = { event: Delivery; attempts: Array<{ id: string; attempt_number: number; response_status: number | null; error: string | null; latency_ms: number; destination: string; created_at: string }> };
 type SupportWorkspace = {
-  workspace: WorkspaceOption & { delivery_paused_at: string | null; delivery_pause_reason: string | null; temporary_message_limit: number | null; temporary_limit_expires_at: string | null; temporary_limit_reason: string | null; plan_message_limit: number; billing_status: string | null; current_period_end: string | null };
-  queue: { pending: number; dead_letter: number; oldest_pending: string | null; accepted_events: number };
+  workspace: WorkspaceOption & { delivery_paused_at: string | null; delivery_pause_reason: string | null; temporary_message_limit: number | null; temporary_limit_expires_at: string | null; temporary_limit_reason: string | null; plan_message_limit: number; billing_status: string | null; current_period_end: string | null; delivery_rate_per_minute: number; delivery_parallelism: number };
+  queue: { pending: number; dead_letter: number; oldest_pending: string | null; accepted_events: number; pending_dispatch: number; oldest_dispatch: string | null; dispatch_errors_last_hour: number };
   notes: Array<{ id: string; note: string; created_at: string; author_name: string; author_email: string | null }>;
 };
 type DeliveryAction = "retry" | "cancel" | "dead_letter" | "resolve" | "archive";
@@ -31,6 +31,8 @@ export function AdminSupport({ workspaces }: { workspaces: WorkspaceOption[] }) 
   const [note, setNote] = useState("");
   const [capacity, setCapacity] = useState("");
   const [capacityExpiry, setCapacityExpiry] = useState("");
+  const [flowRate, setFlowRate] = useState("");
+  const [flowParallelism, setFlowParallelism] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
@@ -61,8 +63,13 @@ export function AdminSupport({ workspaces }: { workspaces: WorkspaceOption[] }) 
   }, [search, status, workspaceId]);
 
   useEffect(() => { void loadWorkspace(); void loadDeliveries(); }, [loadWorkspace, loadDeliveries]);
+  useEffect(() => {
+    if (!workspace) return;
+    setFlowRate(String(workspace.workspace.delivery_rate_per_minute));
+    setFlowParallelism(String(workspace.workspace.delivery_parallelism));
+  }, [workspace]);
 
-  async function workspaceAction(action: "pause" | "resume" | "set_capacity" | "clear_capacity") {
+  async function workspaceAction(action: "pause" | "resume" | "set_capacity" | "clear_capacity" | "set_delivery_limits") {
     if (!workspaceId || reason.trim().length < 3) return setError("Enter an audit reason before changing workspace operations.");
     setBusy(`workspace-${action}`); setError(""); setNotice("");
     try {
@@ -70,6 +77,10 @@ export function AdminSupport({ workspaces }: { workspaces: WorkspaceOption[] }) 
       if (action === "set_capacity") {
         payload.messageLimit = Number(capacity);
         payload.expiresAt = capacityExpiry ? new Date(capacityExpiry).toISOString() : "";
+      }
+      if (action === "set_delivery_limits") {
+        payload.ratePerMinute = Number(flowRate);
+        payload.parallelism = Number(flowParallelism);
       }
       const response = await fetch(`/api/admin/support/workspaces/${workspaceId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json().catch(() => ({}));
@@ -122,11 +133,12 @@ export function AdminSupport({ workspaces }: { workspaces: WorkspaceOption[] }) 
     <section className="content-card support-workspace-panel">
       <header><div><span className="section-label">Workspace operations</span><h2>{currentName}</h2></div><select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} aria-label="Support workspace"><option value="">All workspaces · search only</option>{workspaces.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.plan}</option>)}</select></header>
       {workspace ? <>
-        <div className="support-workspace-metrics"><span><small>Delivery processing</small><strong className={workspace.workspace.delivery_paused_at ? "danger-text" : "success-text"}>{workspace.workspace.delivery_paused_at ? "Paused" : "Running"}</strong></span><span><small>Monthly usage</small><strong>{Number(workspace.queue.accepted_events).toLocaleString()} / {Number(workspace.workspace.temporary_message_limit || workspace.workspace.plan_message_limit).toLocaleString()}</strong></span><span><small>Pending queue</small><strong>{Number(workspace.queue.pending).toLocaleString()}</strong></span><span><small>Open dead letters</small><strong>{Number(workspace.queue.dead_letter).toLocaleString()}</strong></span><span><small>Billing</small><strong>{workspace.workspace.billing_status || "No subscription"}</strong></span></div>
+        <div className="support-workspace-metrics"><span><small>Delivery processing</small><strong className={workspace.workspace.delivery_paused_at ? "danger-text" : "success-text"}>{workspace.workspace.delivery_paused_at ? "Paused" : "Running"}</strong></span><span><small>Monthly usage</small><strong>{Number(workspace.queue.accepted_events).toLocaleString()} / {Number(workspace.workspace.temporary_message_limit || workspace.workspace.plan_message_limit).toLocaleString()}</strong></span><span title={workspace.queue.oldest_dispatch ? `Oldest dispatch: ${new Date(workspace.queue.oldest_dispatch).toLocaleString()}` : "No open outbox work"}><small>Events / outbox</small><strong>{Number(workspace.queue.pending).toLocaleString()} / {Number(workspace.queue.pending_dispatch).toLocaleString()}</strong></span><span><small>Open dead letters</small><strong>{Number(workspace.queue.dead_letter).toLocaleString()}</strong></span><span><small>Publish errors · 1h</small><strong className={Number(workspace.queue.dispatch_errors_last_hour) ? "danger-text" : "success-text"}>{Number(workspace.queue.dispatch_errors_last_hour).toLocaleString()}</strong></span></div>
         <div className="support-control-grid">
           <label>Required audit reason<textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Customer request, incident ID, or operational justification" /></label>
           <div className="support-pause-control"><div><strong>{workspace.workspace.delivery_paused_at ? "Delivery processing is paused" : "Delivery processing is active"}</strong><small>{workspace.workspace.delivery_pause_reason || "Events continue through the normal durable queue."}</small></div><button className={`button ${workspace.workspace.delivery_paused_at ? "" : "secondary"}`} disabled={Boolean(busy)} onClick={() => void workspaceAction(workspace.workspace.delivery_paused_at ? "resume" : "pause")}>{workspace.workspace.delivery_paused_at ? <CirclePlay size={15} /> : <Pause size={15} />}{workspace.workspace.delivery_paused_at ? " Resume" : " Pause"}</button></div>
           <div className="support-capacity-control"><label>Temporary monthly capacity<input type="number" min={workspace.workspace.plan_message_limit} max={100000000} value={capacity} onChange={(event) => setCapacity(event.target.value)} placeholder={workspace.workspace.plan_message_limit.toLocaleString()} /></label><label>Expires<input type="datetime-local" value={capacityExpiry} onChange={(event) => setCapacityExpiry(event.target.value)} /></label><button className="button secondary" disabled={Boolean(busy) || !capacity || !capacityExpiry} onClick={() => void workspaceAction("set_capacity")}>Apply override</button>{workspace.workspace.temporary_message_limit ? <button className="text-button danger-text" disabled={Boolean(busy)} onClick={() => void workspaceAction("clear_capacity")}>Clear {Number(workspace.workspace.temporary_message_limit).toLocaleString()} override</button> : <small>Current plan limit: {workspace.workspace.plan_message_limit.toLocaleString()} events/month</small>}</div>
+          <div className="support-flow-control"><label>Queue rate / minute<input type="number" min={1} max={1000000} value={flowRate} onChange={(event) => setFlowRate(event.target.value)} /></label><label>Parallel deliveries<input type="number" min={1} max={1000} value={flowParallelism} onChange={(event) => setFlowParallelism(event.target.value)} /></label><button className="button secondary" disabled={Boolean(busy) || !flowRate || !flowParallelism} onClick={() => void workspaceAction("set_delivery_limits")}>Save queue limits</button><small>Applied to the workspace queue; endpoint limits remain independent.</small></div>
         </div>
         <div className="support-notes"><div><span className="section-label">Internal history</span><h3>Support notes</h3></div><div className="support-note-compose"><textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add context for the next admin. Never paste secrets or full payloads." /><button className="button secondary" disabled={busy === "note" || note.trim().length < 3} onClick={() => void addNote()}><MessageSquarePlus size={15} /> Add note</button></div>{workspace.notes.length ? <div className="support-note-list">{workspace.notes.map((item) => <article key={item.id}><p>{item.note}</p><small>{item.author_name} · {new Date(item.created_at).toLocaleString()}</small></article>)}</div> : <p className="support-empty">No internal support notes.</p>}</div>
       </> : workspaceId ? <div className="admin-loading"><LoaderCircle className="spin" size={18} /> Loading workspace operations</div> : <div className="support-empty">Select one workspace to use pause, capacity, billing, and internal-note controls.</div>}

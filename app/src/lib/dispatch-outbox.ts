@@ -5,7 +5,9 @@ type DispatchJob = {
   id: string;
   event_id: string;
   endpoint_id: string;
-  rate_limit_per_minute: number | string;
+  workspace_id: string;
+  workspace_rate_limit_per_minute: number | string;
+  workspace_parallelism: number | string;
   delivery_attempt: number | string;
   next_retry_at: string | null;
 };
@@ -41,17 +43,27 @@ export async function scheduleDispatch(eventId: string, availableAt = new Date()
 async function claimDispatchJobs(limit: number, eventId?: string) {
   const sql = requireSql();
   const rows = await sql`
-    with candidates as (
-      select id from dispatch_jobs
-      where (${eventId || null}::uuid is null or event_id = ${eventId || null}::uuid)
-        and ((status = 'pending' and available_at <= now())
-         or (status = 'publishing' and locked_at < now() - interval '2 minutes'))
-        and exists (
-          select 1 from webhook_events e join endpoints ep on ep.id=e.endpoint_id
-          join projects p on p.id=ep.project_id join organizations o on o.id=p.organization_id
-          where e.id=dispatch_jobs.event_id and o.suspended_at is null and o.delivery_paused_at is null
-        )
-      order by available_at asc, created_at asc
+    with eligible as (
+      select j.id, j.available_at, j.created_at, e.endpoint_id, p.organization_id as workspace_id,
+        o.delivery_rate_per_minute as workspace_rate_limit_per_minute,
+        o.delivery_parallelism as workspace_parallelism,
+        e.next_retry_at,
+        row_number() over (partition by p.organization_id order by j.available_at, j.created_at) as workspace_rank
+      from dispatch_jobs j
+      join webhook_events e on e.id=j.event_id
+      join endpoints ep on ep.id=e.endpoint_id
+      join projects p on p.id=ep.project_id
+      join organizations o on o.id=p.organization_id
+      where (${eventId || null}::uuid is null or j.event_id = ${eventId || null}::uuid)
+        and ((j.status='pending' and j.available_at <= now())
+          or (j.status='publishing' and j.locked_at < now() - interval '2 minutes'))
+        and o.suspended_at is null and o.delivery_paused_at is null
+        and ep.is_active=true and ep.deleted_at is null
+    ), candidates as (
+      select j.id, eligible.endpoint_id, eligible.workspace_id,
+        eligible.workspace_rate_limit_per_minute, eligible.workspace_parallelism, eligible.next_retry_at
+      from dispatch_jobs j join eligible on eligible.id=j.id
+      order by eligible.workspace_rank, eligible.available_at, eligible.created_at
       for update skip locked
       limit ${limit}
     )
@@ -59,11 +71,10 @@ async function claimDispatchJobs(limit: number, eventId?: string) {
       publish_attempts = publish_attempts + 1, updated_at = now()
     from candidates c
     where j.id = c.id
-    returning j.id, j.event_id,
-      (select endpoint_id from webhook_events where id = j.event_id) as endpoint_id,
-      (select ep.rate_limit_per_minute from webhook_events e join endpoints ep on ep.id = e.endpoint_id where e.id = j.event_id) as rate_limit_per_minute,
+    returning j.id, j.event_id, c.endpoint_id, c.workspace_id,
+      c.workspace_rate_limit_per_minute, c.workspace_parallelism,
       (select count(*) + 1 from delivery_attempts where event_id = j.event_id) as delivery_attempt,
-      (select next_retry_at from webhook_events where id = j.event_id) as next_retry_at
+      c.next_retry_at
   `;
   return rows as unknown as DispatchJob[];
 }
@@ -83,8 +94,10 @@ export async function dispatchOutboxBatch(limit = 25, eventId?: string): Promise
           ? Math.max(0, Math.ceil((new Date(job.next_retry_at).getTime() - Date.now()) / 1000))
           : 0;
         const result = await enqueueDelivery({
-          eventId: String(job.event_id), endpointId: String(job.endpoint_id),
-          attempt: Number(job.delivery_attempt || 1), rateLimitPerMinute: Number(job.rate_limit_per_minute || 120),
+          eventId: String(job.event_id), endpointId: String(job.endpoint_id), workspaceId: String(job.workspace_id),
+          attempt: Number(job.delivery_attempt || 1),
+          workspaceRateLimitPerMinute: Number(job.workspace_rate_limit_per_minute || 600),
+          workspaceParallelism: Number(job.workspace_parallelism || 10),
           delaySeconds, deduplicationId: `${job.event_id}-dispatch-${job.id}-${job.delivery_attempt}`
         });
         if (!result.queued) throw new Error(result.reason);

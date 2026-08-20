@@ -17,6 +17,9 @@ This register separates capabilities implemented in the repository from operatio
 - Published npm relay CLI, TypeScript SDK, Python SDK, and React embed package.
 - Public component monitoring, incident history, and operator notifications.
 - Repeatable k6 intake profiles and a controllable failure receiver under `load/`.
+- Workspace-scoped queue flow control, fair outbox claiming, durable endpoint throttling, and per-workspace queue telemetry.
+- Guarded sustained, burst, failure, and recovery profiles with run-specific delivery evidence.
+- Read-only backup baseline and restore verification tooling with an isolated recovery runbook.
 
 ## Required deployment configuration
 
@@ -28,9 +31,9 @@ This register separates capabilities implemented in the repository from operatio
 
 ## Evidence gates before reliability claims
 
-- Run k6 at agreed target and burst rates in an isolated project. Record API latency, outbox age, queue delay, delivery latency, failure rate, and database utilization.
+- Run the guarded k6 profiles at the agreed target and burst rates in an isolated project. Retain API and end-to-end delivery evidence, outbox age, queue delay, delivery latency, failure rate, and database utilization.
 - Test destination timeouts, `429`, `500`, queue interruption, duplicate callbacks, and worker interruption.
-- Perform and record a Neon backup restore exercise.
+- Perform and record an isolated backup restore exercise using `docs/DISASTER_RECOVERY.md`; tooling alone is not restore evidence.
 - Establish external uptime monitoring and enough history for any displayed reliability percentage.
 - Complete security, dependency, incident-response, privacy, legal, and data-processing reviews.
 - Define support hours, recovery objectives, retention obligations, and exclusions before offering an SLA.

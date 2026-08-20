@@ -14,6 +14,22 @@ export type DeliveryProcessResult = {
   retryScheduled?: boolean;
 };
 
+async function reserveEndpointDeliverySlot(endpointId: string, rateLimitPerMinute: number) {
+  const sql = requireSql();
+  const [slot] = await sql`
+    insert into endpoint_delivery_windows (endpoint_id, window_started_at, delivery_count, updated_at)
+    values (${endpointId}, date_trunc('minute', now()), 1, now())
+    on conflict (endpoint_id) do update set
+      window_started_at=case when endpoint_delivery_windows.window_started_at < date_trunc('minute', now()) then date_trunc('minute', now()) else endpoint_delivery_windows.window_started_at end,
+      delivery_count=case when endpoint_delivery_windows.window_started_at < date_trunc('minute', now()) then 1 else endpoint_delivery_windows.delivery_count + 1 end,
+      updated_at=now()
+    where endpoint_delivery_windows.window_started_at < date_trunc('minute', now())
+      or endpoint_delivery_windows.delivery_count < ${Math.max(1, rateLimitPerMinute)}
+    returning endpoint_id
+  `;
+  return Boolean(slot);
+}
+
 export async function updateMessageStatus(messageId: string) {
   const sql = requireSql();
   const [summary] = await sql`
@@ -41,18 +57,20 @@ export async function updateMessageStatus(messageId: string) {
 export async function processDelivery(eventId: string): Promise<DeliveryProcessResult> {
   const sql = requireSql();
   const [claimed] = await sql`
-    update webhook_events set status = 'processing', locked_at = now(), updated_at = now()
-    where id = ${eventId}
-      and status in ('queued','received','retrying')
+    with target as (select id, status as previous_status from webhook_events where id=${eventId})
+    update webhook_events e set status = 'processing', locked_at = now(), updated_at = now()
+    from target
+    where e.id = target.id
+      and e.status in ('queued','received','retrying')
       and (next_retry_at is null or next_retry_at <= now())
       and (locked_at is null or locked_at < now() - interval '5 minutes')
       and exists (
         select 1 from endpoints ep join projects p on p.id=ep.project_id
         join organizations o on o.id=p.organization_id
-        where ep.id=webhook_events.endpoint_id and o.suspended_at is null and o.delivery_paused_at is null
+        where ep.id=e.endpoint_id and o.suspended_at is null and o.delivery_paused_at is null
       )
-    returning id, endpoint_id, message_id, direction, event_type, request_body, request_raw_body, request_content_type,
-      max_retries, revenue_amount, revenue_at_risk, is_simulation
+    returning e.id, e.endpoint_id, e.message_id, e.direction, e.event_type, e.request_body, e.request_raw_body, e.request_content_type,
+      e.max_retries, e.revenue_amount, e.revenue_at_risk, e.is_simulation, target.previous_status
   `;
   if (!claimed) return { processed: false, reason: "Event is already processing, completed, or not due" };
   const [endpoint] = await sql`
@@ -66,6 +84,17 @@ export async function processDelivery(eventId: string): Promise<DeliveryProcessR
     await sql`update webhook_events set status = 'dead_letter', locked_at = null, next_retry_at = null, dead_lettered_at = now(), last_error = 'Endpoint is inactive', updated_at = now() where id = ${claimed.id}`;
     if (claimed.message_id) await updateMessageStatus(String(claimed.message_id));
     return { processed: true, status: "dead_letter" };
+  }
+  if (!(await reserveEndpointDeliverySlot(String(claimed.endpoint_id), Number(endpoint.rate_limit_per_minute || 120)))) {
+    const nextWindow = new Date(Math.ceil(Date.now() / 60_000) * 60_000 + 1000);
+    await sql`update webhook_events set status=${claimed.previous_status}, locked_at=null, next_retry_at=${nextWindow.toISOString()}, updated_at=now() where id=${claimed.id} and status='processing'`;
+    await sql`
+      insert into dispatch_jobs (event_id, status, available_at, last_error, locked_at, qstash_message_id, published_at, updated_at)
+      values (${claimed.id}, 'pending', ${nextWindow.toISOString()}, 'Endpoint delivery rate limit deferred this event', null, null, null, now())
+      on conflict (event_id) do update set status='pending', available_at=excluded.available_at,
+        last_error=excluded.last_error, locked_at=null, qstash_message_id=null, published_at=null, updated_at=now()
+    `;
+    return { processed: false, reason: "Endpoint delivery rate limit reached", status: String(claimed.previous_status) };
   }
   const [attemptRow] = await sql`select count(*)::int as count from delivery_attempts where event_id = ${claimed.id}`;
   const attempt = Number(attemptRow.count || 0) + 1;

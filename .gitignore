@@ -2,3 +2,5 @@
 .vercel
 .env*
 !app/.env.example
+app/recovery-evidence*.json
+app/recovery-baseline*.json

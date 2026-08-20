@@ -33,11 +33,13 @@ export const options = {
 
 export default function () {
   const sequence = `${__VU}-${__ITER}-${Date.now()}`;
+  const runId = __ENV.LOAD_RUN_ID || "manual-inbound-run";
   const response = http.post(`${__ENV.BASE_URL}/in/${__ENV.ENDPOINT_ID}`, JSON.stringify({
     id: `load-${sequence}`,
     type: "loadtest.inbound",
     createdAt: new Date().toISOString(),
-    data: { sequence }
+    loadRunId: runId,
+    data: { sequence, loadRunId: runId }
   }), { headers: { "content-type": "application/json", "user-agent": "PayloadGrid-k6/1.0" } });
   const ok = check(response, { "inbound accepted": (value) => value.status === 200 || value.status === 202 });
   accepted.add(ok);

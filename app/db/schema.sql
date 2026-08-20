@@ -76,9 +76,21 @@ alter table organizations add column if not exists delivery_paused_by uuid refer
 alter table organizations add column if not exists temporary_message_limit integer;
 alter table organizations add column if not exists temporary_limit_expires_at timestamptz;
 alter table organizations add column if not exists temporary_limit_reason text;
+alter table organizations add column if not exists delivery_rate_per_minute integer not null default 600;
+alter table organizations add column if not exists delivery_parallelism integer not null default 10;
 do $$ begin
   alter table organizations add constraint organizations_temporary_message_limit_check
     check (temporary_message_limit is null or temporary_message_limit > 0);
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table organizations add constraint organizations_delivery_rate_check
+    check (delivery_rate_per_minute between 1 and 1000000);
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table organizations add constraint organizations_delivery_parallelism_check
+    check (delivery_parallelism between 1 and 1000);
 exception when duplicate_object then null;
 end $$;
 
@@ -547,6 +559,16 @@ create index if not exists webhook_events_payload_expiry_idx on webhook_events(p
 create index if not exists delivery_attempts_event_id_idx on delivery_attempts(event_id);
 create index if not exists dispatch_jobs_pending_idx on dispatch_jobs(available_at, created_at) where status = 'pending';
 create index if not exists dispatch_jobs_stale_idx on dispatch_jobs(locked_at) where status = 'publishing';
+create index if not exists dispatch_jobs_recent_activity_idx
+  on dispatch_jobs(coalesce(published_at, locked_at, updated_at) desc)
+  where status in ('publishing','published');
+
+create table if not exists endpoint_delivery_windows (
+  endpoint_id uuid primary key references endpoints(id) on delete cascade,
+  window_started_at timestamptz not null,
+  delivery_count integer not null default 0 check (delivery_count >= 0),
+  updated_at timestamptz not null default now()
+);
 create index if not exists api_keys_project_id_idx on api_keys(project_id);
 create index if not exists transformations_project_id_idx on transformations(project_id);
 create index if not exists alert_rules_project_id_idx on alert_rules(project_id);

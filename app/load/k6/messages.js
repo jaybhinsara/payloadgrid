@@ -34,11 +34,13 @@ export const options = {
 
 export default function () {
   const sequence = `${__VU}-${__ITER}-${Date.now()}`;
+  const runId = __ENV.LOAD_RUN_ID || "manual-load-run";
+  const scenario = __ENV.LOAD_SCENARIO || "baseline";
   const response = http.post(`${__ENV.BASE_URL}/api/v1/messages`, JSON.stringify({
     applicationId: __ENV.APPLICATION_ID,
-    eventType: "loadtest.message",
-    payload: { sequence, sentAt: new Date().toISOString(), size: "bounded" }
-  }), { headers: { authorization: `Bearer ${__ENV.API_KEY}`, "content-type": "application/json", "idempotency-key": `load-${sequence}` } });
+    eventType: `loadtest.${scenario}`,
+    payload: { loadRunId: runId, scenario, sequence, sentAt: new Date().toISOString(), size: "bounded" }
+  }), { headers: { authorization: `Bearer ${__ENV.API_KEY}`, "content-type": "application/json", "idempotency-key": `${runId}-${sequence}` } });
   const body = response.json();
   const ok = check(response, { "accepted or duplicate": (value) => value.status === 202 || value.status === 200 });
   accepted.add(ok); acceptanceLatency.add(response.timings.duration);

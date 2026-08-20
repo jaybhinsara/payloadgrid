@@ -14,9 +14,10 @@ export const options = {
 };
 
 export default function () {
+  const runId = __ENV.LOAD_RUN_ID || "manual-batch-run";
   const events = Array.from({ length: batchSize }, (_, index) => {
     const id = `${__VU}-${__ITER}-${index}-${Date.now()}`;
-    return { applicationId: __ENV.APPLICATION_ID, eventType: "loadtest.batch", idempotencyKey: `batch-${id}`, payload: { id } };
+    return { applicationId: __ENV.APPLICATION_ID, eventType: "loadtest.batch", idempotencyKey: `${runId}-${id}`, payload: { id, loadRunId: runId, scenario: "batch" } };
   });
   const response = http.post(`${__ENV.BASE_URL}/api/v1/messages/batch`, JSON.stringify({ events }), { headers: { authorization: `Bearer ${__ENV.API_KEY}`, "content-type": "application/json" } });
   check(response, { "batch accepted": (value) => value.status === 202, "all items accepted": () => response.json()?.rejected === 0 });
