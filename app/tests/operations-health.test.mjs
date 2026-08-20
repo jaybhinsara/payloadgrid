@@ -22,6 +22,10 @@ test("health marks only overdue delivery and dispatch work as degraded", () => {
   assert.doesNotMatch(health, /min\(received_at\).*retrying/s);
 });
 
+test("health does not classify intentional endpoint throttling as a queue error", () => {
+  assert.match(health, /last_error <> 'Endpoint delivery rate limit deferred this event'/);
+});
+
 test("private diagnostics require elevated workspace access", () => {
   assert.match(privateRoute, /requireSession\(\)/);
   assert.match(privateRoute, /requireRole\(context, \["owner", "admin"\]\)/);

@@ -14,7 +14,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\load\run.ps1 -Profile recovery -BaseUrl https://payloadgrid.com -ApiKey pg_live_... -ApplicationId APPLICATION_UUID -IsolatedProject -Approval I_APPROVE_LOAD_TEST
 ```
 
-The guarded runner records a k6 JSON summary, console output, and non-secret metadata under `load/results/`. The included profiles stay within the current 300-request/minute limit: baseline outbound and inbound run at 2 requests/second, limit runs at 5 requests/second, and batch sends 25 events twice per second. The batch profile consumes approximately 3,000 monthly events in one minute.
+The guarded runner records a k6 JSON summary, console output, and non-secret metadata under `load/results/`. Baseline outbound and inbound run at 2 requests/second, limit runs at 5 requests/second, and batch sends 25 events twice per second. Sustained runs at 10 requests/second. Burst ramps from 5 to 50 requests/second and back over two minutes, scheduling approximately 3,300 requests. Those higher-rate profiles require a test workspace whose plan, temporary monthly capacity, queue quota, and destination rate are all high enough. The batch profile consumes approximately 3,000 monthly events in one minute.
+
+Burst evidence includes separate counters for `429` rate limits, `5xx` responses, transport failures, and total rejected requests. A Starter key is limited to 1,000 API requests per minute, so the 50 requests/second burst is expected to cross that limit. Use an isolated Growth-or-higher test workspace when measuring 50 requests/second ingestion capacity rather than rate-limit behavior.
 
 Run higher rates only in a dedicated production-like deployment after increasing that environment's plan limits and confirming Vercel, Neon, and QStash capacity. Never increase `MaxEvents` without reviewing the expected queue and database cost.
 

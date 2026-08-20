@@ -24,7 +24,9 @@ $config = switch ($Profile) {
   "batch" { @{ Rate = 2; Duration = "1m"; BatchSize = 25; Script = "batch.js" } }
   "inbound" { @{ Rate = 2; Duration = "2m"; BatchSize = 1; Script = "inbound.js" } }
   "sustained" { @{ Rate = 10; Duration = "10m"; BatchSize = 1; Script = "messages.js" } }
-  "burst" { @{ Rate = 50; Duration = "3m"; BatchSize = 1; Script = "burst.js" } }
+  # burst.js ramps 5/s -> 50/s -> 5/s over two minutes. Its staged
+  # arrival-rate area schedules approximately 3,300 iterations.
+  "burst" { @{ Rate = 50; Duration = "2m"; BatchSize = 1; Script = "burst.js"; EstimatedEvents = 3300 } }
   "failure" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
   "recovery" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
 }
@@ -42,7 +44,11 @@ function DurationSeconds([string]$Value) {
   throw "Unsupported duration: $Value"
 }
 
-$estimatedEvents = $config.Rate * (DurationSeconds $config.Duration) * $config.BatchSize
+$estimatedEvents = if ($config.ContainsKey("EstimatedEvents")) {
+  [int]$config.EstimatedEvents
+} else {
+  $config.Rate * (DurationSeconds $config.Duration) * $config.BatchSize
+}
 if ($estimatedEvents -gt $MaxEvents) {
   throw "Profile would send approximately $estimatedEvents events, above MaxEvents=$MaxEvents."
 }
@@ -85,10 +91,16 @@ $env:BATCH_SIZE = [string]$config.BatchSize
 $env:LOAD_RUN_ID = $runId
 $env:LOAD_SCENARIO = $Profile
 
+$exitCode = 1
+$previousErrorActionPreference = $ErrorActionPreference
 try {
+  # k6 writes threshold failures to stderr. Preserve its exit code without
+  # turning a completed test into a terminating PowerShell NativeCommandError.
+  $ErrorActionPreference = "Continue"
   & $k6Path run --summary-export $summary $script 2>&1 | Tee-Object -FilePath $console
   $exitCode = $LASTEXITCODE
 } finally {
+  $ErrorActionPreference = $previousErrorActionPreference
   Remove-Item Env:API_KEY -ErrorAction SilentlyContinue
   Remove-Item Env:BASE_URL -ErrorAction SilentlyContinue
   Remove-Item Env:APPLICATION_ID -ErrorAction SilentlyContinue
@@ -117,4 +129,5 @@ Write-Host "Recorded summary: $summary"
 Write-Host "Recorded console: $console"
 Write-Host "Recorded metadata: $metadata"
 if (Test-Path -LiteralPath $evidence) { Write-Host "Recorded delivery evidence: $evidence" }
+if ($exitCode -ne 0) { Write-Warning "k6 completed with failed thresholds (exit code $exitCode). Review the recorded summary and failure samples." }
 exit $exitCode

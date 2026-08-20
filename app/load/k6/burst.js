@@ -1,10 +1,15 @@
 import http from "k6/http";
 import { check } from "k6";
-import { Rate, Trend } from "k6/metrics";
+import { Counter, Rate, Trend } from "k6/metrics";
 
 const accepted = new Rate("payloadgrid_burst_accepted");
+const rejected = new Counter("payloadgrid_burst_rejected");
+const rateLimited = new Counter("payloadgrid_burst_rate_limited");
+const serverErrors = new Counter("payloadgrid_burst_server_errors");
+const transportErrors = new Counter("payloadgrid_burst_transport_errors");
 const latency = new Trend("payloadgrid_burst_latency", true);
 const peak = Number(__ENV.RATE || 50);
+let loggedFailureSamples = 0;
 
 export function setup() {
   for (const name of ["BASE_URL", "API_KEY", "APPLICATION_ID", "LOAD_RUN_ID"]) {
@@ -44,4 +49,14 @@ export default function () {
   const ok = check(response, { "burst request accepted": (value) => value.status === 202 || value.status === 200 });
   accepted.add(ok);
   latency.add(response.timings.duration);
+  if (!ok) {
+    rejected.add(1, { status: String(response.status || 0) });
+    if (response.status === 429) rateLimited.add(1);
+    if (response.status >= 500) serverErrors.add(1);
+    if (!response.status) transportErrors.add(1);
+    if (loggedFailureSamples < 3) {
+      console.error(`Rejected burst request: status=${response.status || 0} body=${String(response.body || "").slice(0, 300)}`);
+      loggedFailureSamples += 1;
+    }
+  }
 }

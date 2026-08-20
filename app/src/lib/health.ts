@@ -61,7 +61,9 @@ async function readOutboxMetrics(projectId?: string) {
     const [row] = await sql`
       select count(*) filter (where j.status = 'pending')::int as pending,
         count(*) filter (where j.status = 'publishing')::int as publishing,
-        count(*) filter (where j.last_error is not null and j.updated_at >= now() - interval '1 hour')::int as errors,
+        count(*) filter (where j.last_error is not null
+          and j.last_error <> 'Endpoint delivery rate limit deferred this event'
+          and j.updated_at >= now() - interval '1 hour')::int as errors,
         coalesce(extract(epoch from (now() - min(case
           when j.status = 'pending' and j.available_at <= now() then j.available_at
           when j.status = 'publishing' then coalesce(j.locked_at, j.updated_at)
@@ -76,7 +78,9 @@ async function readOutboxMetrics(projectId?: string) {
   const [row] = await sql`
     select count(*) filter (where status = 'pending')::int as pending,
       count(*) filter (where status = 'publishing')::int as publishing,
-      count(*) filter (where last_error is not null and updated_at >= now() - interval '1 hour')::int as errors,
+      count(*) filter (where last_error is not null
+        and last_error <> 'Endpoint delivery rate limit deferred this event'
+        and updated_at >= now() - interval '1 hour')::int as errors,
       coalesce(extract(epoch from (now() - min(case
         when status = 'pending' and available_at <= now() then available_at
         when status = 'publishing' then coalesce(locked_at, updated_at)
