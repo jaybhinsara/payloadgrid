@@ -14,7 +14,7 @@ test("event contracts are standard, versioned, application scoped, and non-block
   assert.match(contracts, /validatorCache/);
   assert.match(contracts, /assertExampleMatchesSchema/);
   assert.match(contracts, /enum value/);
-  assert.match(outbound, /validateEventPayload/);
+  assert.match(outbound, /validateContractPayload/);
   assert.match(inbound, /validateEventPayload/);
   assert.doesNotMatch(outbound, /throw.*validationWarnings/);
   assert.match(versionApi, /dryRun/);

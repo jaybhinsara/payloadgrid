@@ -20,14 +20,14 @@ export async function POST(request: Request) {
   try {
     const key = await authenticateApiKey(request, "messages:write");
     if (!key) return NextResponse.json({ ok: false, error: "Invalid or revoked API key" }, { status: 401 });
-    await enforceApiRateLimit(key.keyId);
+    await enforceApiRateLimit(key.keyId, key.apiRequestsPerMinute);
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > MAX_BATCH_BODY_BYTES) return NextResponse.json({ ok: false, error: "Batch body exceeds 4 MB" }, { status: 413 });
     const rawBody = await request.text();
     if (Buffer.byteLength(rawBody, "utf8") > MAX_BATCH_BODY_BYTES) return NextResponse.json({ ok: false, error: "Batch body exceeds 4 MB" }, { status: 413 });
     const body = schema.parse(JSON.parse(rawBody));
     body.events.forEach((event) => assertPayloadSize(event.payload));
-    await enforceMonthlyMessageLimit(key.projectId, body.events.length);
+    await enforceMonthlyMessageLimit(key.projectId, body.events.length, { organizationId: key.organizationId, messagesPerMonth: key.messagesPerMonth });
 
     const results = [];
     for (let index = 0; index < body.events.length; index += 10) {

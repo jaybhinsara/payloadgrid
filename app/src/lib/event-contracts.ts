@@ -78,6 +78,17 @@ function validator(contract: PublishedContract) {
   return compiled;
 }
 
+export function validateContractPayload(contract: PublishedContract | null, payload: unknown) {
+  if (!contract) return { contractVersion: null, warnings: [] as ContractWarning[] };
+  try {
+    const validate = validator(contract);
+    validate(payload);
+    return { contractVersion: contract.version, warnings: warnings(validate.errors) };
+  } catch (error) {
+    return { contractVersion: contract.version, warnings: [{ path: "/", keyword: "compile", message: error instanceof Error ? error.message : "Contract could not be compiled" }] };
+  }
+}
+
 export async function publishedContract(projectId: string, applicationId: string | null, eventType: string): Promise<PublishedContract | null> {
   const sql = requireSql();
   const [row] = await sql`
@@ -92,12 +103,5 @@ export async function publishedContract(projectId: string, applicationId: string
 
 export async function validateEventPayload(projectId: string, applicationId: string | null, eventType: string, payload: unknown) {
   const contract = await publishedContract(projectId, applicationId, eventType);
-  if (!contract) return { contractVersion: null, warnings: [] as ContractWarning[] };
-  try {
-    const validate = validator(contract);
-    validate(payload);
-    return { contractVersion: contract.version, warnings: warnings(validate.errors) };
-  } catch (error) {
-    return { contractVersion: contract.version, warnings: [{ path: "/", keyword: "compile", message: error instanceof Error ? error.message : "Contract could not be compiled" }] };
-  }
+  return validateContractPayload(contract, payload);
 }

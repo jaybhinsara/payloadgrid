@@ -28,7 +28,8 @@ test("commercial plans are centralized and enforced by organization plan", async
   assert.match(regionalPricing, /priceInCurrencySubunits/);
   assert.match(plans, /messagesPerMonth: 1_000_000/);
   assert.match(limits, /planLimits\(String\(account\?\.plan \|\| "free"\)\)/);
-  assert.match(limits, /p\.organization_id=\$\{account\?\.organization_id\}/);
+  assert.match(limits, /organization_usage_month_buckets/);
+  assert.match(limits, /context\?\.messagesPerMonth/);
   assert.match(dashboard, /planLimits\(plan\.id\)/);
   assert.match(pricing, /RazorpayCheckoutButton/);
   assert.match(pricing, /Payments temporarily unavailable/);

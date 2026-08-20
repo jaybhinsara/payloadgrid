@@ -17,14 +17,16 @@ Every console API resolves the current session and project on the server. Resour
 
 1. A customer backend calls `POST /api/v1/messages` with a PayloadGrid API key.
 2. PayloadGrid hashes the supplied key and resolves its project.
-3. An idempotency key lookup prevents duplicate messages.
-4. Active transformations are applied to the payload.
-5. One database transaction stores the message, creates every matching endpoint delivery, and inserts one dispatch outbox row per delivery.
-6. The API returns `202 Accepted`; a background dispatcher publishes pending outbox rows to QStash.
-7. Each worker atomically claims a delivery and signs its exact outgoing body.
-8. The response, headers, status, body, error, and latency are stored.
-9. A failed attempt and its delayed retry outbox row commit together.
-10. Alert rules are evaluated against failures in their configured time window.
+3. The authenticated key lookup also resolves plan limits; key activity timestamps are written at most once every five minutes per warm runtime.
+4. A bounded 16-bucket monthly ledger enforces accepted-event capacity without scanning retained message and webhook tables.
+5. Application ownership, active transformations, and the published event contract are loaded together. Transformations and non-blocking contract validation run before acceptance.
+6. An idempotency key prevents duplicate messages.
+7. One database transaction stores the message, creates every matching endpoint delivery, and inserts one dispatch outbox row per delivery.
+8. The API returns `202 Accepted`; a background dispatcher publishes pending outbox rows to QStash.
+9. Each worker atomically claims a delivery and signs its exact outgoing body.
+10. The response, headers, status, body, error, and latency are stored.
+11. A failed attempt and its delayed retry outbox row commit together.
+12. Alert rules are evaluated against failures in their configured time window.
 
 ## Inbound sequence
 
@@ -39,3 +41,5 @@ Vercel `after` starts low-latency dispatch after an accepted response, while pro
 ## Capacity boundary
 
 The public API supports one event per request or bounded batches of at most 100 events, 4 MB per batch, and 256 KB per event. Fan-out is set based, not sequential in application code. Queue publication is decoupled from acceptance through the outbox. These properties remove request-time fan-out as a bottleneck, but throughput claims must come from repeatable load and failure tests against the deployed provider plans. The repository includes k6 profiles under `load/`; no unmeasured requests-per-second or SLA claim is implied.
+
+Accepted-event usage is an append-only monthly ledger: deleting retained payload or delivery records does not restore plan capacity. Simulations and delivery attempts do not increment that ledger. The bucket table is a quota-enforcement optimization, not a replacement for immutable billing-provider records.

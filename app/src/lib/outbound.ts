@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { requireSql } from "@/lib/db";
 import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
 import { queueConfigured } from "@/lib/queue";
-import { validateEventPayload } from "@/lib/event-contracts";
+import { validateContractPayload, type PublishedContract } from "@/lib/event-contracts";
 
 export type AcceptMessageInput = {
   projectId: string;
@@ -51,19 +51,44 @@ function transformPayload(payload: unknown, configs: unknown[]) {
 
 export async function acceptMessage(input: AcceptMessageInput) {
   const sql = requireSql();
-  const [application] = await sql`select id from applications where id = ${input.applicationId} and project_id = ${input.projectId} limit 1`;
-  if (!application) throw new Error("Application not found in this project");
-  const transformations = await sql`
-    select config from transformations where project_id = ${input.projectId} and is_active = true
-      and (event_type is null or event_type = ${input.eventType}) order by created_at asc
+  const [config] = await sql`
+    select a.id,
+      coalesce((
+        select jsonb_agg(t.config order by t.created_at asc)
+        from transformations t
+        where t.project_id = ${input.projectId} and t.is_active = true
+          and (t.event_type is null or t.event_type = ${input.eventType})
+      ), '[]'::jsonb) as transformations,
+      contract.event_type_id, contract.version as contract_version, contract.schema as contract_schema,
+      contract.example as contract_example
+    from applications a
+    left join lateral (
+      select et.id as event_type_id, ec.version, ec.schema, ec.example
+      from event_types et
+      join event_contract_versions ec on ec.event_type_id = et.id and ec.status = 'published'
+      where et.project_id = ${input.projectId} and et.name = ${input.eventType}
+        and (et.application_id = ${input.applicationId}::uuid or et.application_id is null)
+      order by (et.application_id is not null) desc, ec.version desc
+      limit 1
+    ) contract on true
+    where a.id = ${input.applicationId} and a.project_id = ${input.projectId}
+    limit 1
   `;
-  const payload = transformPayload(input.payload, transformations.map((row) => row.config));
-  const validation = await validateEventPayload(input.projectId, input.applicationId, input.eventType, payload);
+  if (!config) throw new Error("Application not found in this project");
+  const transformations = Array.isArray(config.transformations) ? config.transformations : [];
+  const payload = transformPayload(input.payload, transformations);
+  const contract: PublishedContract | null = config.event_type_id ? {
+    eventTypeId: String(config.event_type_id),
+    version: Number(config.contract_version),
+    schema: config.contract_schema as Record<string, unknown>,
+    example: config.contract_example
+  } : null;
+  const validation = validateContractPayload(contract, payload);
   const messageId = randomUUID();
   const [accepted] = await sql`
     with accepted_message as (
-      insert into messages (id, project_id, application_id, event_type, idempotency_key, payload, status, contract_version, validation_warnings)
-      values (${messageId}, ${input.projectId}, ${input.applicationId}, ${input.eventType}, ${input.idempotencyKey || null}, ${JSON.stringify(payload)}::jsonb, 'queued', ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb)
+      insert into messages (id, project_id, application_id, event_type, idempotency_key, payload, status, contract_version, validation_warnings, is_simulation)
+      values (${messageId}, ${input.projectId}, ${input.applicationId}, ${input.eventType}, ${input.idempotencyKey || null}, ${JSON.stringify(payload)}::jsonb, 'queued', ${validation.contractVersion}, ${JSON.stringify(validation.warnings)}::jsonb, ${Boolean(input.isSimulation)})
       on conflict (project_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key
       returning id, id = ${messageId}::uuid as inserted
     ), inserted_events as (

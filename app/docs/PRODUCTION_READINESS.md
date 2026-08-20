@@ -18,12 +18,14 @@ This register separates capabilities implemented in the repository from operatio
 - Public component monitoring, incident history, and operator notifications.
 - Repeatable k6 intake profiles and a controllable failure receiver under `load/`.
 - Workspace-scoped queue flow control, fair outbox claiming, durable endpoint throttling, and per-workspace queue telemetry.
+- Bounded monthly usage accounting, throttled API-key activity writes, and combined acceptance configuration reads for the ingestion hot path.
 - Guarded sustained, burst, failure, and recovery profiles with run-specific delivery evidence.
 - Read-only backup baseline and restore verification tooling with an isolated recovery runbook.
 
 ## Required deployment configuration
 
 1. Run the complete idempotent `db/schema.sql` against production Neon.
+   For an incremental deployment, run `db/migrations/20260820_ingestion_hot_path.sql` before deploying code that reads the usage ledger.
 2. Configure QStash and protected schedules for `/api/cron/dispatch`, `/api/cron/retry-failed`, `/api/cron/maintenance`, and `/api/cron/monitor`.
 3. Keep encryption, cron, OAuth, email, and queue secrets in Vercel server-only variables.
 4. Test successful delivery, retry, dead-letter recovery, secret rotation, and stale dispatch recovery.

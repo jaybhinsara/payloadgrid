@@ -13,8 +13,8 @@ export async function POST(request: Request) {
   try {
     const key = await authenticateApiKey(request, "messages:write");
     if (!key) return NextResponse.json({ ok: false, error: "Invalid or revoked API key" }, { status: 401 });
-    await enforceApiRateLimit(key.keyId);
-    await enforceMonthlyMessageLimit(key.projectId);
+    await enforceApiRateLimit(key.keyId, key.apiRequestsPerMinute);
+    await enforceMonthlyMessageLimit(key.projectId, 1, { organizationId: key.organizationId, messagesPerMonth: key.messagesPerMonth });
     const body = schema.parse(await request.json());
     assertPayloadSize(body.payload);
     const result = await acceptMessage({ projectId: key.projectId, applicationId: body.applicationId, eventType: body.eventType, payload: body.payload, idempotencyKey: request.headers.get("idempotency-key") });

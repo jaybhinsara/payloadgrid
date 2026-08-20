@@ -4,7 +4,7 @@ import { amountFromPayload, eventTypeFromPayload, providerEventIdFromPayload, sa
 import { evaluateCircuitBreaker, notifyCircuitOpened } from "@/lib/circuit-breaker";
 import { requireSql } from "@/lib/db";
 import { dispatchOutboxBatch } from "@/lib/dispatch-outbox";
-import { enforceInboundRateLimit, enforceMonthlyMessageLimit, UsageLimitError } from "@/lib/limits";
+import { enforceInboundRateLimit, enforceMonthlyMessageLimit, planLimits, UsageLimitError } from "@/lib/limits";
 import { parseInboundBody } from "@/lib/inbound-content";
 import { verifyProviderWebhook } from "@/lib/provider-verification";
 import { queueConfigured } from "@/lib/queue";
@@ -26,13 +26,18 @@ export async function POST(request: Request, contextValue: { params: Promise<{ e
       select ep.id, ep.project_id, ep.application_id, ep.provider, ep.destination_url, ep.is_active, ep.provider_secret_encrypted,
         ep.provider_verification_required, ep.rate_limit_per_minute, ep.circuit_breaker_enabled,
         ep.circuit_breaker_threshold, ep.circuit_state, ep.name, ep.revenue_tracking_mode, ep.revenue_amount_path,
-        ep.revenue_currency_path, ep.revenue_fixed_currency, ep.revenue_amount_unit
+        ep.revenue_currency_path, ep.revenue_fixed_currency, ep.revenue_amount_unit, o.id as organization_id, o.plan,
+        case when o.temporary_limit_expires_at > now() then o.temporary_message_limit else null end as temporary_message_limit
       from endpoints ep join projects p on p.id=ep.project_id join organizations o on o.id=p.organization_id
       where ep.id = ${endpointId} and ep.deleted_at is null and o.suspended_at is null limit 1
     `;
     if (!endpoint?.is_active) return NextResponse.json({ ok: false, error: "Unknown or inactive PayloadGrid endpoint" }, { status: 404 });
-    await enforceInboundRateLimit(String(endpoint.id));
-    await enforceMonthlyMessageLimit(String(endpoint.project_id));
+    const limits = planLimits(String(endpoint.plan || "free"));
+    await enforceInboundRateLimit(String(endpoint.id), limits.inboundRequestsPerMinute);
+    await enforceMonthlyMessageLimit(String(endpoint.project_id), 1, {
+      organizationId: String(endpoint.organization_id),
+      messagesPerMonth: endpoint.temporary_message_limit ? Number(endpoint.temporary_message_limit) : limits.messagesPerMonth
+    });
     const provider = String(endpoint.provider) as Provider;
     const verification = verifyProviderWebhook(provider, rawBody, request.headers, endpoint.provider_secret_encrypted ? String(endpoint.provider_secret_encrypted) : null);
     if (endpoint.provider_verification_required && !verification.verified) return NextResponse.json({ ok: false, error: verification.error || "Provider signature verification failed" }, { status: 401 });
