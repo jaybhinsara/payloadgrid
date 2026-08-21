@@ -33,6 +33,7 @@ export function AuthForm({ mode, providers }: { mode: "login" | "signup"; provid
   const search = useSearchParams();
   const [error, setError] = useState(() => authErrors[search.get("error") || ""] || "");
   const [notice, setNotice] = useState("");
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [accountType, setAccountType] = useState<"company" | "individual">("company");
   const signup = mode === "signup";
@@ -50,13 +51,13 @@ export function AuthForm({ mode, providers }: { mode: "login" | "signup"; provid
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setError("");
+    setError(""); setVerificationRequired(false);
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form.entries());
     const response = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...values, inviteToken: inviteToken || undefined }) });
     const payload = await response.json().catch(() => ({}));
     setLoading(false);
-    if (!response.ok) { setError(payload.error || "Could not continue"); return; }
+    if (!response.ok) { setError(payload.error || "Could not continue"); setVerificationRequired(payload.code === "EMAIL_VERIFICATION_REQUIRED"); return; }
     if (payload.requiresVerification) {
       setNotice(payload.emailSent ? "Check your inbox and verify your email before signing in." : "Your workspace was created, but the verification email could not be sent. Contact support.");
       return;
@@ -99,7 +100,7 @@ export function AuthForm({ mode, providers }: { mode: "login" | "signup"; provid
             <label>Password<input name="password" type="password" autoComplete={signup ? "new-password" : "current-password"} required minLength={signup ? 10 : 1} placeholder={signup ? "At least 10 characters" : "Your password"} /></label>
             {signup ? <label className="auth-consent"><input name="acceptTerms" type="checkbox" required /><span>I agree to the <Link href="/terms" target="_blank">Terms</Link> and acknowledge the <Link href="/privacy" target="_blank">Privacy Policy</Link>.</span></label> : null}
             {!signup ? <Link className="forgot-link" href="/forgot-password">Forgot password?</Link> : null}
-            {error ? <div className="form-error">{error}</div> : null}
+            {error ? <div className="form-error">{error}{verificationRequired ? <Link href="/verify-email">Request another verification link</Link> : null}</div> : null}
             <button className="button primary wide" disabled={loading}>{loading ? <LoaderCircle className="spin" size={18} /> : null}{inviteToken ? "Join workspace" : signup ? "Create workspace" : "Sign in"}<ArrowRight size={17} /></button>
           </form>
         </>}

@@ -196,6 +196,25 @@ create table if not exists sessions (
   last_seen_at timestamptz not null default now()
 );
 
+alter table sessions add column if not exists user_agent text;
+alter table sessions add column if not exists ip_address text;
+
+create table if not exists account_audit_logs (
+  id bigserial primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  action text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists auth_rate_limit_windows (
+  action text not null,
+  identifier_hash text not null,
+  window_start timestamptz not null,
+  request_count integer not null default 0 check (request_count >= 0),
+  primary key (action, identifier_hash, window_start)
+);
+
 create table if not exists projects (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid references organizations(id) on delete cascade,
@@ -551,6 +570,9 @@ create index if not exists oauth_states_expires_at_idx on oauth_states(expires_a
 create index if not exists sessions_token_hash_idx on sessions(token_hash);
 create index if not exists auth_tokens_expiry_idx on auth_tokens(expires_at) where used_at is null;
 create index if not exists sessions_expires_at_idx on sessions(expires_at);
+create index if not exists sessions_user_created_at_idx on sessions(user_id, created_at desc);
+create index if not exists account_audit_logs_user_created_at_idx on account_audit_logs(user_id, created_at desc);
+create index if not exists auth_rate_limit_windows_created_idx on auth_rate_limit_windows(window_start);
 create index if not exists projects_organization_id_idx on projects(organization_id);
 create index if not exists applications_project_id_idx on applications(project_id);
 create index if not exists event_types_project_id_idx on event_types(project_id);

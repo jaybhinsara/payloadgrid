@@ -37,6 +37,30 @@ export async function GET(request: Request) {
     const expiredSessions = await sql`delete from sessions where expires_at <= now() or last_seen_at <= now() - interval '7 days' returning id`;
     const expiredOAuthStates = await sql`delete from oauth_states where expires_at <= now() returning state_hash`;
     const expiredAuthTokens = await sql`delete from auth_tokens where expires_at <= now() or (used_at is not null and used_at <= now() - interval '1 day') returning id`;
+    const expiredAuthRateWindows = await sql`delete from auth_rate_limit_windows where window_start < now() - interval '2 days' returning identifier_hash`;
+    const configuredRetention = Number(process.env.UNVERIFIED_ACCOUNT_RETENTION_DAYS || 7);
+    const unverifiedRetentionDays = Number.isFinite(configuredRetention) ? Math.min(30, Math.max(1, Math.floor(configuredRetention))) : 7;
+    const abandonedUsers = await sql`
+      select id, email from users
+      where verification_required = true and email_verified_at is null
+        and created_at <= now() - (${unverifiedRetentionDays} * interval '1 day')
+        and not exists (select 1 from sessions where sessions.user_id = users.id and sessions.expires_at > now())
+      order by created_at asc limit 100
+    `;
+    let removedOrphanWorkspaces = 0;
+    for (const user of abandonedUsers) {
+      const orphanOrganizations = await sql`
+        select om.organization_id from organization_members om
+        where om.user_id = ${user.id}
+          and not exists (select 1 from organization_members other where other.organization_id = om.organization_id and other.user_id <> ${user.id})
+      `;
+      await sql`update organization_invitations set accepted_at = null where lower(email) = lower(${user.email}) and accepted_at is not null and expires_at > now()`;
+      await sql`delete from users where id = ${user.id}`;
+      for (const organization of orphanOrganizations) {
+        const removed = await sql`delete from organizations where id = ${organization.organization_id} and not exists (select 1 from organization_members where organization_id = ${organization.organization_id}) returning id`;
+        removedOrphanWorkspaces += removed.length;
+      }
+    }
     const expiredPlaygroundInboxes = await sql`delete from playground_inboxes where expires_at <= now() returning id`;
     const expiredPlans = await sql`
       with expired_subscriptions as (
@@ -49,7 +73,7 @@ export async function GET(request: Request) {
       where o.id = s.organization_id and o.plan = s.plan
       returning o.id
     `;
-    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0), expiredSessions: expiredSessions.length, expiredOAuthStates: expiredOAuthStates.length, expiredAuthTokens: expiredAuthTokens.length, expiredPlaygroundInboxes: expiredPlaygroundInboxes.length, expiredPlans: expiredPlans.length });
+    return NextResponse.json({ ok: true, redactedEvents: expired.length, prunedServiceChecks: Number(serviceCheckPruning?.deleted_count || 0), expiredSessions: expiredSessions.length, expiredOAuthStates: expiredOAuthStates.length, expiredAuthTokens: expiredAuthTokens.length, expiredAuthRateWindows: expiredAuthRateWindows.length, expiredUnverifiedAccounts: abandonedUsers.length, removedOrphanWorkspaces, expiredPlaygroundInboxes: expiredPlaygroundInboxes.length, expiredPlans: expiredPlans.length });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Maintenance failed" }, { status: 500 });
   }

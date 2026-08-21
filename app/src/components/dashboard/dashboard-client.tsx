@@ -15,11 +15,12 @@ import { UsageView } from "@/components/dashboard/views/usage";
 import { WorkspaceView } from "@/components/dashboard/views/workspace";
 import { OperationsView } from "@/components/dashboard/views/operations";
 import { AnalyticsView } from "@/components/dashboard/views/analytics";
+import { AccountSecurityView } from "@/components/dashboard/views/account-security";
 
 const nav: Array<{ id: View; label: string; icon: typeof Gauge; group: string }> = [
   { id: "overview", label: "Overview", icon: Gauge, group: "Workspace" }, { id: "analytics", label: "Analytics", icon: BarChart3, group: "Workspace" }, { id: "applications", label: "Applications", icon: AppWindow, group: "Workspace" }, { id: "endpoints", label: "Endpoints", icon: Route, group: "Workspace" },
   { id: "messages", label: "Messages", icon: MessageSquareText, group: "Activity" }, { id: "deliveries", label: "Deliveries", icon: Activity, group: "Activity" }, { id: "event-types", label: "Event types", icon: Braces, group: "Activity" },
-  { id: "workspace", label: "Workspace", icon: Building2, group: "Manage" }, { id: "operations", label: "System health", icon: ServerCog, group: "Manage" }, { id: "api-keys", label: "API keys", icon: KeyRound, group: "Manage" }, { id: "team", label: "Team", icon: Users, group: "Manage" }, { id: "usage", label: "Usage", icon: BarChart3, group: "Manage" }, { id: "settings", label: "Automations", icon: Settings2, group: "Manage" }
+  { id: "workspace", label: "Workspace", icon: Building2, group: "Manage" }, { id: "operations", label: "System health", icon: ServerCog, group: "Manage" }, { id: "api-keys", label: "API keys", icon: KeyRound, group: "Manage" }, { id: "team", label: "Team", icon: Users, group: "Manage" }, { id: "usage", label: "Usage", icon: BarChart3, group: "Manage" }, { id: "settings", label: "Automations", icon: Settings2, group: "Manage" }, { id: "account", label: "Account security", icon: ShieldCheck, group: "Manage" }
 ];
 
 export function DashboardClient() {
@@ -91,6 +92,7 @@ export function DashboardClient() {
       {view === "team" ? <TeamView data={data} busy={busy} submit={submit} reveal={setInviteToken} mutate={mutate} /> : null}
       {view === "usage" ? <UsageView data={data} /> : null}
       {view === "settings" ? <AutomationsView data={data} busy={busy} submit={submit} mutate={mutate} /> : null}
+      {view === "account" ? <AccountSecurityView /> : null}
     </div></section>
     {selectedEvent ? <EventDrawer event={selectedEvent} endpointName={endpointName} close={() => setSelectedEvent(null)} copy={copy} replay={replayDelivery} mutate={mutate} /> : null}
     {newToken ? <SecretModal title="API key created" copy="This key is shown once. Store it securely before closing." secret={newToken} close={() => setNewToken("")} copyValue={copy} /> : null}

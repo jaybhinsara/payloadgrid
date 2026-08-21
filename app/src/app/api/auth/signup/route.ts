@@ -4,6 +4,7 @@ import { createSession } from "@/lib/auth";
 import { createAuthToken, EMAIL_VERIFICATION_HOURS, emailDeliveryConfigured, sendAuthEmail } from "@/lib/email";
 import { requireSql } from "@/lib/db";
 import { hashPassword, randomToken, sha256, slugify } from "@/lib/security";
+import { authRateLimitResponse, enforceAuthRateLimit } from "@/lib/auth-rate-limit";
 
 export const runtime = "nodejs";
 const optionalUrl = z.union([z.literal(""), z.string().trim().url().max(300)]).optional();
@@ -18,6 +19,8 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const sql = requireSql(); const body = schema.parse(await request.json()); const email = body.email.toLowerCase();
+    await enforceAuthRateLimit(request, "signup-ip", { limit: 10, windowSeconds: 3600 });
+    await enforceAuthRateLimit(request, "signup-email", { identifier: email, limit: 3, windowSeconds: 3600 });
     if (process.env.NODE_ENV === "production" && !emailDeliveryConfigured()) return NextResponse.json({ ok: false, error: "Email verification is temporarily unavailable" }, { status: 503 });
     const [existing] = await sql`select id from users where email = ${email} limit 1`;
     if (existing) return NextResponse.json({ ok: false, error: "An account with this email already exists. Sign in before joining the invited workspace." }, { status: 409 });
@@ -45,9 +48,11 @@ export async function POST(request: Request) {
       const sent = await sendAuthEmail(email, "verify_email", token);
       return NextResponse.json({ ok: true, requiresVerification: true, emailSent: sent }, { status: 201 });
     }
-    await createSession(String(user.id));
+    await createSession(String(user.id), request);
     return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, email: user.email }, requiresVerification: false }, { status: 201 });
   } catch (error) {
+    const limited = authRateLimitResponse(error);
+    if (limited) return NextResponse.json(limited.body, { status: limited.status, headers: limited.headers });
     const message = error instanceof Error ? error.message : "Sign up failed";
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check your account details." }, { status: 400 });
     console.error("Sign up failed", error);

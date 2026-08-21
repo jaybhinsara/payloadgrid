@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSession, setActiveOrganization } from "@/lib/auth";
 import { completeOAuth, isOAuthProvider, OAuthError } from "@/lib/oauth";
 import { SITE_URL } from "@/lib/site";
+import { writeAccountAudit } from "@/lib/account-audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,8 @@ export async function GET(request: Request, context: { params: Promise<{ provide
 
   try {
     const result = await completeOAuth(provider, { code, state });
-    await createSession(result.userId);
+    await createSession(result.userId, request);
+    await writeAccountAudit(result.userId, "account.oauth_login_succeeded", { provider });
     if (result.organizationId) await setActiveOrganization(result.organizationId);
     return NextResponse.redirect(new URL(result.profileComplete ? result.returnTo : "/account/setup", SITE_URL), 303);
   } catch (error) {

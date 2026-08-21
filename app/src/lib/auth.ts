@@ -23,10 +23,19 @@ export type SessionContext = {
 export class AuthenticationError extends Error { status = 401; }
 export class AuthorizationError extends Error { status = 403; }
 
-export async function createSession(userId: string) {
+function requestMetadata(request?: Request) {
+  if (!request) return { userAgent: null, ipAddress: null };
+  return {
+    userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
+    ipAddress: (request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null)?.slice(0, 100) || null
+  };
+}
+
+export async function createSession(userId: string, request?: Request) {
   const sql = requireSql();
   const token = randomToken(32);
-  await sql`insert into sessions (user_id, token_hash, expires_at) values (${userId}, ${sha256(token)}, now() + (${SESSION_DAYS} * interval '1 day'))`;
+  const metadata = requestMetadata(request);
+  await sql`insert into sessions (user_id, token_hash, expires_at, user_agent, ip_address) values (${userId}, ${sha256(token)}, now() + (${SESSION_DAYS} * interval '1 day'), ${metadata.userAgent}, ${metadata.ipAddress})`;
   const store = await cookies();
   store.set(SESSION_COOKIE, token, cookieOptions);
 }
