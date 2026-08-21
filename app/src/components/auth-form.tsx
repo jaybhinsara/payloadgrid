@@ -6,7 +6,9 @@ import { ArrowRight, CheckCircle2, LoaderCircle } from "lucide-react";
 import { Brand } from "@/components/brand";
 import type { OAuthProvider } from "@/lib/oauth";
 
-const oauthErrors: Record<string, string> = {
+const authErrors: Record<string, string> = {
+  "missing-verification-token": "This verification link is incomplete. Request a new link from sign in.",
+  "invalid-verification-link": "This verification link is invalid, expired, or already used. Sign in to request a new one.",
   oauth_cancelled: "Provider sign-in was cancelled.",
   oauth_not_configured: "That sign-in provider is not available yet.",
   oauth_state_invalid: "This sign-in attempt expired. Please try again.",
@@ -28,9 +30,10 @@ function ProviderIcon({ provider }: { provider: OAuthProvider }) {
 export function AuthForm({ mode, providers }: { mode: "login" | "signup"; providers: OAuthProvider[] }) {
   const router = useRouter();
   const search = useSearchParams();
-  const [error, setError] = useState(() => oauthErrors[search.get("error") || ""] || "");
+  const [error, setError] = useState(() => authErrors[search.get("error") || ""] || "");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [accountType, setAccountType] = useState<"company" | "individual">("company");
   const signup = mode === "signup";
   const inviteToken = search.get("invite") || "";
   const returnTo = search.get("next") || "";
@@ -86,9 +89,14 @@ export function AuthForm({ mode, providers }: { mode: "login" | "signup"; provid
           {providers.length ? <div className="auth-divider"><span>or continue with email</span></div> : null}
           <form onSubmit={submit}>
             {signup ? <label>Full name<input name="name" autoComplete="name" required minLength={2} placeholder="Jane Smith" /></label> : null}
-            {signup && !inviteToken ? <label>Company or workspace<input name="organizationName" autoComplete="organization" required minLength={2} placeholder="Acme" /></label> : null}
+            {signup ? <fieldset className="account-type-field"><legend>Account type</legend><div className="account-type-options"><label><input type="radio" name="accountType" value="company" checked={accountType === "company"} onChange={() => setAccountType("company")} /><span><strong>Company</strong><small>For a registered business or team</small></span></label><label><input type="radio" name="accountType" value="individual" checked={accountType === "individual"} onChange={() => setAccountType("individual")} /><span><strong>Individual</strong><small>For personal projects and evaluation</small></span></label></div></fieldset> : null}
+            {signup && !inviteToken ? <label>Workspace name<input name="organizationName" autoComplete="organization" required minLength={2} placeholder={accountType === "company" ? "Acme engineering" : "Jane's workspace"} /></label> : null}
+            {signup && !inviteToken && accountType === "company" ? <label>Registered company name<input name="legalName" autoComplete="organization" required minLength={2} placeholder="Acme Technologies Ltd" /></label> : null}
+            {signup && !inviteToken && accountType === "company" ? <label>Company website <span className="optional-label">Optional</span><input name="website" type="url" autoComplete="url" placeholder="https://acme.com" /></label> : null}
             <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="you@company.com" /></label>
+            {signup ? <label>Country code<input name="countryCode" autoComplete="country" required pattern="[A-Za-z]{2}" maxLength={2} placeholder="US" /></label> : null}
             <label>Password<input name="password" type="password" autoComplete={signup ? "new-password" : "current-password"} required minLength={signup ? 10 : 1} placeholder={signup ? "At least 10 characters" : "Your password"} /></label>
+            {signup ? <label className="auth-consent"><input name="acceptTerms" type="checkbox" required /><span>I agree to the <Link href="/terms" target="_blank">Terms</Link> and acknowledge the <Link href="/privacy" target="_blank">Privacy Policy</Link>.</span></label> : null}
             {!signup ? <Link className="forgot-link" href="/forgot-password">Forgot password?</Link> : null}
             {error ? <div className="form-error">{error}</div> : null}
             <button className="button primary wide" disabled={loading}>{loading ? <LoaderCircle className="spin" size={18} /> : null}{inviteToken ? "Join workspace" : signup ? "Create workspace" : "Sign in"}<ArrowRight size={17} /></button>

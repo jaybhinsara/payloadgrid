@@ -182,19 +182,19 @@ async function githubProfile(code: string, state: OAuthState): Promise<ProviderP
 async function establishAccount(provider: OAuthProvider, profile: ProviderProfile, invitationId: string | null) {
   const sql = requireSql();
   const [linked] = await sql`
-    select u.id, u.name, u.email, u.suspended_at
+    select u.id, u.name, u.email, u.suspended_at, u.profile_completed_at
     from oauth_accounts oa join users u on u.id = oa.user_id
     where oa.provider = ${provider} and oa.provider_user_id = ${profile.providerUserId}
     limit 1
   `;
   let user = linked;
   if (!user) {
-    [user] = await sql`select id, name, email, suspended_at from users where lower(email) = ${profile.email} limit 1`;
+    [user] = await sql`select id, name, email, suspended_at, profile_completed_at from users where lower(email) = ${profile.email} limit 1`;
     if (!user) {
       [user] = await sql`
-        insert into users (name, email, password_hash, email_verified_at, verification_required)
-        values (${profile.name}, ${profile.email}, null, now(), false)
-        returning id, name, email
+        insert into users (name, email, password_hash, email_verified_at, verification_required, profile_completed_at)
+        values (${profile.name}, ${profile.email}, null, now(), false, null)
+        returning id, name, email, profile_completed_at
       `;
     } else {
       await sql`update users set email_verified_at = coalesce(email_verified_at, now()), updated_at = now() where id = ${user.id}`;
@@ -226,7 +226,7 @@ async function establishAccount(provider: OAuthProvider, profile: ProviderProfil
   } else if (!organizationId) {
     organizationId = String(membership.organization_id);
   }
-  return { userId: String(user.id), organizationId };
+  return { userId: String(user.id), organizationId, profileComplete: Boolean(user.profile_completed_at) };
 }
 
 export async function completeOAuth(provider: OAuthProvider, input: { code: string; state: string }) {

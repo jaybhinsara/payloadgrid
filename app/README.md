@@ -10,7 +10,7 @@ Documentation:
 
 ## Implemented
 
-- Email/password and optional Google and GitHub accounts, email verification, password reset, secure HTTP-only sessions
+- Email/password and optional Google and GitHub accounts, company or individual profiles, email verification, password reset, and expiring HTTP-only sessions
 - Organizations, roles, projects, applications, team invitations, and tenant-scoped queries
 - Scoped, hashed API keys, idempotent single and batch message acceptance, event subscriptions, and transformations
 - Transactional database outbox, asynchronous QStash publication, stale-job recovery, and atomic worker claiming
@@ -81,7 +81,7 @@ Then configure:
 
 For local testing, register the corresponding `http://localhost:3200/api/auth/oauth/PROVIDER/callback` URL in a separate development app. Never prefix these server-only variables with `NEXT_PUBLIC_`.
 
-PayloadGrid verifies provider identity tokens or verified email records, binds the provider's stable account ID to one user, and then issues the same PayloadGrid HTTP-only session used by password login. OAuth signup also creates the first workspace or accepts a matching pending invitation.
+PayloadGrid verifies provider identity tokens or verified email records, binds the provider's stable account ID to one user, and then issues the same PayloadGrid HTTP-only session used by password login. A new OAuth account completes company or individual profile details before entering the dashboard. OAuth signup also creates the first workspace or accepts a matching pending invitation.
 
 ## Durable queue
 
@@ -122,7 +122,7 @@ For verified new accounts and password reset, configure:
 - `RESEND_API_KEY`
 - `PAYLOADGRID_AUTH_FROM`: a verified sender such as `PayloadGrid <auth@your-domain.com>`
 
-When these are absent, local password authentication remains available and new accounts are marked verified automatically. Add email configuration before inviting external users.
+Verification links expire after 24 hours. Production signup fails closed when transactional email is unavailable; local development can still create automatically verified accounts. Password reset links expire after one hour. Sessions have a 30-day absolute lifetime and a seven-day inactivity timeout.
 
 Optional alert variables:
 

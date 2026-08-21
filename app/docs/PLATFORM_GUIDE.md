@@ -502,7 +502,22 @@ With hourly monitoring, detection can take up to three hours and automatic recov
 
 Raw service checks are bounded operational data. The daily maintenance job allows the table to grow to 1,000 rows, then removes older checks and retains the newest 100. Incident records and incident updates are not removed by this pruning policy.
 
-## 13. Environment variables
+## 13. Account authentication and identity
+
+New email/password accounts choose Company or Individual, provide a two-letter country code, and accept the current Terms and Privacy Policy. Company accounts also record a registered name and may include a website. Production signup fails closed if verification email delivery is unavailable.
+
+Authentication validity is bounded:
+
+- email verification links are single-use and expire after 24 hours;
+- password reset links are single-use and expire after one hour;
+- OAuth state is consumed once and expires after 10 minutes;
+- browser sessions have a 30-day absolute lifetime and a seven-day idle timeout.
+
+Google and GitHub users have provider-verified email addresses, then complete the same Company or Individual profile before entering the dashboard. Email verification confirms control of the address; it does not independently establish legal identity or company authority.
+
+The protected maintenance route removes expired sessions, OAuth state, and stale authentication tokens. Keep its schedule active in production.
+
+## 14. Environment variables
 
 ### Required application variables
 
@@ -545,7 +560,7 @@ Use the base64 value for `PAYLOADGRID_ENCRYPTION_KEY` and the hex value for `CRO
 
 Set production secrets directly in Vercel. Use `.env.local` only for local development and never commit it.
 
-## 14. Deployment and infrastructure flow
+## 15. Deployment and infrastructure flow
 
 ```mermaid
 flowchart LR
@@ -597,7 +612,7 @@ Upstash-Forward-Authorization: Bearer YOUR_CRON_SECRET
 
 QStash delivery jobs and retries also count against the QStash message quota. Increase schedule frequency only when the plan and operational target support it.
 
-## 15. Current plan limits
+## 16. Current plan limits
 
 The implemented project limits are:
 
@@ -614,7 +629,7 @@ The implemented project limits are:
 
 Vercel, Neon, QStash, and Resend have separate infrastructure quotas. The application's displayed plan limits do not override provider quotas.
 
-## 16. Security model
+## 17. Security model
 
 Implemented controls include:
 
@@ -641,7 +656,7 @@ These controls do not constitute SOC 2, ISO/IEC 27001, PCI DSS, HIPAA, or other 
 
 Regional data residency is intentionally not implemented in the current deployment. A future regional design requires independent Vercel and Neon data planes and an immutable organization-region assignment; Neon branches inside one project are not a residency boundary.
 
-## 17. Troubleshooting
+## 18. Troubleshooting
 
 ### Public API returns 401
 
@@ -693,7 +708,7 @@ Confirm `DATABASE_URL` is present in the active Vercel environment and run the c
 
 Confirm the monitoring schedule returns HTTP `200`. The history begins after the first successful `/api/cron/monitor` run.
 
-## 18. Production onboarding checklist
+## 19. Production onboarding checklist
 
 - [ ] Production workspace and project are selected.
 - [ ] Production API key is stored only in the producer's secret manager.
@@ -711,7 +726,7 @@ Confirm the monitoring schedule returns HTTP `200`. The history begins after the
 - [ ] Data retention and customer deletion expectations are documented.
 - [ ] Vercel, Neon, QStash, and email usage are monitored.
 
-## 19. Suggested customer workflow
+## 20. Suggested customer workflow
 
 For each new customer or application context:
 

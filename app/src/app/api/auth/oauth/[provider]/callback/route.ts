@@ -23,7 +23,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     const result = await completeOAuth(provider, { code, state });
     await createSession(result.userId);
     if (result.organizationId) await setActiveOrganization(result.organizationId);
-    return NextResponse.redirect(new URL(result.returnTo, SITE_URL), 303);
+    return NextResponse.redirect(new URL(result.profileComplete ? result.returnTo : "/account/setup", SITE_URL), 303);
   } catch (error) {
     console.error("OAuth callback failed", provider, error instanceof Error ? error.message : error);
     return errorRedirect(error instanceof OAuthError ? error.code : "oauth_failed");

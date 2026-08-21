@@ -21,6 +21,7 @@ This register separates capabilities implemented in the repository from operatio
 - Bounded monthly usage accounting, sharded per-minute rate counters, throttled API-key activity writes, and combined acceptance configuration reads for the ingestion hot path.
 - Guarded sustained, burst, failure, and recovery profiles with run-specific delivery evidence.
 - Read-only backup baseline and restore verification tooling with an isolated recovery runbook.
+- Company and individual account profiles, terms/privacy acceptance timestamps, 24-hour email verification, 10-minute OAuth state, one-hour password reset, and bounded session expiry.
 
 ## Required deployment configuration
 

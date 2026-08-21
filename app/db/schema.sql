@@ -16,7 +16,15 @@ alter table users alter column password_hash drop not null;
 alter table users add column if not exists suspended_at timestamptz;
 alter table users add column if not exists suspension_reason text;
 alter table users add column if not exists suspended_by uuid references users(id) on delete set null;
-
+alter table users add column if not exists account_type text not null default 'individual';
+alter table users add column if not exists profile_completed_at timestamptz default now();
+alter table users alter column profile_completed_at drop not null;
+alter table users add column if not exists terms_accepted_at timestamptz;
+alter table users add column if not exists privacy_accepted_at timestamptz;
+do $$ begin
+  alter table users add constraint users_account_type_check check (account_type in ('individual', 'company'));
+exception when duplicate_object then null;
+end $$;
 create table if not exists oauth_accounts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users(id) on delete cascade,
@@ -78,6 +86,18 @@ alter table organizations add column if not exists temporary_limit_expires_at ti
 alter table organizations add column if not exists temporary_limit_reason text;
 alter table organizations add column if not exists delivery_rate_per_minute integer not null default 600;
 alter table organizations add column if not exists delivery_parallelism integer not null default 10;
+alter table organizations add column if not exists customer_type text not null default 'individual';
+alter table organizations add column if not exists legal_name text;
+alter table organizations add column if not exists website text;
+alter table organizations add column if not exists country_code text;
+do $$ begin
+  alter table organizations add constraint organizations_customer_type_check check (customer_type in ('individual', 'company'));
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table organizations add constraint organizations_country_code_check check (country_code is null or country_code ~ '^[A-Z]{2}$');
+exception when duplicate_object then null;
+end $$;
 do $$ begin
   alter table organizations add constraint organizations_temporary_message_limit_check
     check (temporary_message_limit is null or temporary_message_limit > 0);
