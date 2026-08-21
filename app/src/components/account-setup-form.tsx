@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, LoaderCircle, ShieldCheck } from "lucide-react";
+import { COUNTRY_OPTIONS } from "@/lib/countries";
 
 type InitialProfile = {
   name: string;
@@ -37,7 +38,7 @@ export function AccountSetupForm({ initial }: { initial: InitialProfile }) {
       <fieldset className="account-type-field"><legend>Account type</legend><div className="account-type-options"><label><input type="radio" name="accountType" value="company" checked={accountType === "company"} onChange={() => setAccountType("company")} /><span><strong>Company</strong><small>Registered business or team</small></span></label><label><input type="radio" name="accountType" value="individual" checked={accountType === "individual"} onChange={() => setAccountType("individual")} /><span><strong>Individual</strong><small>Personal projects or evaluation</small></span></label></div></fieldset>
       <div className="account-setup-grid"><label>Full name<input name="name" defaultValue={initial.name} autoComplete="name" required minLength={2} /></label><label>Workspace name<input name="organizationName" defaultValue={initial.organizationName} autoComplete="organization" required minLength={2} /></label></div>
       {accountType === "company" ? <div className="account-setup-grid"><label>Registered company name<input name="legalName" defaultValue={initial.legalName} autoComplete="organization" required minLength={2} /></label><label>Company website <span className="optional-label">Optional</span><input name="website" defaultValue={initial.website} type="url" autoComplete="url" placeholder="https://company.com" /></label></div> : <input name="legalName" type="hidden" value="" />}
-      <label>Country code<input name="countryCode" defaultValue={initial.countryCode} autoComplete="country" required pattern="[A-Za-z]{2}" maxLength={2} placeholder="US" /></label>
+      <label>Country or region<select name="countryCode" defaultValue={initial.countryCode} autoComplete="country" required><option value="" disabled>Select your country or region</option>{COUNTRY_OPTIONS.map((country) => <option key={country.code} value={country.code}>{country.name} ({country.code})</option>)}</select><small className="field-help">Used for account, billing, and regional defaults.</small></label>
       <label className="auth-consent"><input name="acceptTerms" type="checkbox" required /><span>I agree to the current <Link href="/terms" target="_blank">Terms</Link> and acknowledge the <Link href="/privacy" target="_blank">Privacy Policy</Link>.</span></label>
       {error ? <div className="form-error">{error}</div> : null}{notice ? <div className="setup-notice"><CheckCircle2 size={17} /> {notice}</div> : null}
       <button className="button primary" disabled={loading}>{loading ? <LoaderCircle className="spin" size={17} /> : <ShieldCheck size={17} />} Save account details <ArrowRight size={16} /></button>

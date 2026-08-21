@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle2, LoaderCircle } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { COUNTRY_OPTIONS } from "@/lib/countries";
 import type { OAuthProvider } from "@/lib/oauth";
 
 const authErrors: Record<string, string> = {
@@ -94,7 +95,7 @@ export function AuthForm({ mode, providers }: { mode: "login" | "signup"; provid
             {signup && !inviteToken && accountType === "company" ? <label>Registered company name<input name="legalName" autoComplete="organization" required minLength={2} placeholder="Acme Technologies Ltd" /></label> : null}
             {signup && !inviteToken && accountType === "company" ? <label>Company website <span className="optional-label">Optional</span><input name="website" type="url" autoComplete="url" placeholder="https://acme.com" /></label> : null}
             <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="you@company.com" /></label>
-            {signup ? <label>Country code<input name="countryCode" autoComplete="country" required pattern="[A-Za-z]{2}" maxLength={2} placeholder="US" /></label> : null}
+            {signup ? <label>Country or region<select name="countryCode" autoComplete="country" required defaultValue=""><option value="" disabled>Select your country or region</option>{COUNTRY_OPTIONS.map((country) => <option key={country.code} value={country.code}>{country.name} ({country.code})</option>)}</select><small className="field-help">Used for account, billing, and regional defaults. You can change it later.</small></label> : null}
             <label>Password<input name="password" type="password" autoComplete={signup ? "new-password" : "current-password"} required minLength={signup ? 10 : 1} placeholder={signup ? "At least 10 characters" : "Your password"} /></label>
             {signup ? <label className="auth-consent"><input name="acceptTerms" type="checkbox" required /><span>I agree to the <Link href="/terms" target="_blank">Terms</Link> and acknowledge the <Link href="/privacy" target="_blank">Privacy Policy</Link>.</span></label> : null}
             {!signup ? <Link className="forgot-link" href="/forgot-password">Forgot password?</Link> : null}

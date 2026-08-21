@@ -969,8 +969,10 @@ p { color: var(--muted); line-height: 1.6; }
 .account-type-options small { color: var(--muted); font-size: 10px; line-height: 1.35; }
 .auth-field-row { display: grid; grid-template-columns: minmax(0, 1fr) 105px; gap: 10px; }
 .optional-label { color: var(--muted); font-size: 9px; font-weight: 650; text-transform: uppercase; }
-.auth-consent { display: grid !important; grid-template-columns: 17px minmax(0, 1fr); align-items: start; gap: 9px !important; color: var(--muted); font-size: 11px !important; font-weight: 500 !important; line-height: 1.5; }
-.auth-consent input { width: 17px !important; height: 17px !important; margin: 1px 0 0; }
+.field-help { color: var(--muted); font-size: 10px; font-weight: 500; line-height: 1.45; }
+.auth-consent { display: flex !important; align-items: flex-start; gap: 10px !important; padding: 4px 0; color: var(--muted); font-size: 11px !important; font-weight: 500 !important; line-height: 1.5; }
+.auth-consent input[type="checkbox"] { width: 18px !important; min-width: 18px; height: 18px !important; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0; }
+.auth-consent span { min-width: 0; padding: 0; }
 .auth-consent a { color: var(--ink); font-weight: 750; text-decoration: underline; text-underline-offset: 2px; }
 @media(max-width:520px){.account-type-options,.auth-field-row{grid-template-columns:1fr}.auth-field-row label:last-child{max-width:none}}
 .account-setup-shell { min-height: 100vh; background: var(--canvas); padding: 26px; }
