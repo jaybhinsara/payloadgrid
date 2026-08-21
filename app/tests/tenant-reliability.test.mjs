@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [schema, queue, outbox, worker, recovery, runner] = await Promise.all([
+const [schema, queue, outbox, worker, recovery, runner, noisyNeighbor, evidence] = await Promise.all([
   read("../db/schema.sql"), read("../src/lib/queue.ts"), read("../src/lib/dispatch-outbox.ts"),
-  read("../src/lib/delivery-worker.ts"), read("../ops/recovery-evidence.mjs"), read("../load/run.ps1")
+  read("../src/lib/delivery-worker.ts"), read("../ops/recovery-evidence.mjs"), read("../load/run.ps1"),
+  read("../load/k6/noisy-neighbor.js"), read("../load/evidence.mjs")
 ]);
 
 test("queue flow control is isolated by workspace", () => {
@@ -13,6 +14,18 @@ test("queue flow control is isolated by workspace", () => {
   assert.match(schema, /delivery_parallelism/);
   assert.match(queue, /key: `workspace-\$\{input\.workspaceId\}`/);
   assert.match(queue, /workspaceRateLimitPerMinute/);
+});
+
+test("noisy-neighbor evidence isolates the control tenant from burst traffic", () => {
+  assert.match(runner, /"noisy-neighbor"/);
+  assert.match(runner, /ControlApiKey/);
+  assert.match(noisyNeighbor, /noisy_tenant/);
+  assert.match(noisyNeighbor, /control_tenant/);
+  assert.match(noisyNeighbor, /payloadgrid_control_tenant_rate_limited/);
+  assert.match(noisyNeighbor, /payloadgrid_control_tenant_server_errors/);
+  assert.match(noisyNeighbor, /API_KEY === __ENV\.CONTROL_API_KEY/);
+  assert.match(evidence, /tenantBreakdown/);
+  assert.match(evidence, /tenant_role/);
 });
 
 test("outbox claims are fair across workspaces and retain endpoint throttling", () => {

@@ -34,6 +34,32 @@ const duplicateAttempts = await sql`
     group by event_id, attempt_number having count(*) > 1
   ) duplicates
 `;
-const evidence = { runId, recordedAt: new Date().toISOString(), ...summary, duplicateAttemptNumbers: Number(duplicateAttempts[0]?.duplicate_attempt_numbers || 0) };
+const tenantBreakdown = await sql`
+  with run_events as (
+    select e.*,
+      coalesce(e.request_body->>'tenantRole', e.request_body#>>'{data,tenantRole}', 'unspecified') as tenant_role
+    from webhook_events e
+    where e.request_body->>'loadRunId'=${runId} or e.request_body#>>'{data,loadRunId}'=${runId}
+  )
+  select tenant_role,
+    count(*)::int as deliveries,
+    count(*) filter (where status='delivered')::int as delivered,
+    count(*) filter (where status='retrying')::int as retrying,
+    count(*) filter (where status='dead_letter')::int as dead_letter,
+    count(*) filter (where status in ('queued','received','processing','buffered'))::int as pending,
+    count(*) filter (where status='cancelled')::int as cancelled,
+    coalesce(avg(extract(epoch from (updated_at - received_at)) * 1000), 0)::numeric(12,2) as average_lifecycle_ms,
+    coalesce(percentile_cont(0.95) within group (order by extract(epoch from (updated_at - received_at)) * 1000), 0)::numeric(12,2) as p95_lifecycle_ms
+  from run_events
+  group by tenant_role
+  order by tenant_role
+`;
+const evidence = {
+  runId,
+  recordedAt: new Date().toISOString(),
+  ...summary,
+  duplicateAttemptNumbers: Number(duplicateAttempts[0]?.duplicate_attempt_numbers || 0),
+  tenantBreakdown
+};
 await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`, { flag: "wx" });
 console.log(JSON.stringify(evidence, null, 2));

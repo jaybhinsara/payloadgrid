@@ -1,10 +1,12 @@
 param(
-  [ValidateSet("baseline", "limit", "batch", "inbound", "sustained", "starter-burst", "burst", "failure", "recovery")]
+  [ValidateSet("baseline", "limit", "batch", "inbound", "sustained", "starter-burst", "burst", "noisy-neighbor", "failure", "recovery")]
   [string]$Profile = "baseline",
   [Parameter(Mandatory = $true)]
   [string]$BaseUrl,
   [string]$ApiKey,
   [string]$ApplicationId,
+  [string]$ControlApiKey,
+  [string]$ControlApplicationId,
   [string]$EndpointId,
   [switch]$IsolatedProject,
   [string]$Approval,
@@ -30,6 +32,9 @@ $config = switch ($Profile) {
   # burst.js ramps 5/s -> 50/s -> 5/s over two minutes. Its staged
   # arrival-rate area schedules approximately 3,300 iterations.
   "burst" { @{ Rate = 50; Duration = "2m"; BatchSize = 1; Script = "burst.js"; EstimatedEvents = 3300 } }
+  # Starter-safe two-tenant isolation test: a 15/s noisy tenant runs beside
+  # a steady 2/s control tenant. Each tenant uses a separate workspace key.
+  "noisy-neighbor" { @{ Rate = 15; ControlRate = 2; Duration = "2m"; BatchSize = 1; Script = "noisy-neighbor.js"; EstimatedEvents = 1200 } }
   "failure" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
   "recovery" { @{ Rate = 5; Duration = "2m"; BatchSize = 1; Script = "messages.js" } }
 }
@@ -39,6 +44,12 @@ if ($Profile -eq "inbound") {
 } else {
   if ($ApiKey -notmatch '^pg_[A-Za-z0-9_-]+') { throw "ApiKey does not look like a PayloadGrid key." }
   if ($ApplicationId -notmatch '^[0-9a-fA-F-]{36}$') { throw "ApplicationId must be a UUID." }
+}
+if ($Profile -eq "noisy-neighbor") {
+  if ($ControlApiKey -notmatch '^pg_[A-Za-z0-9_-]+') { throw "ControlApiKey does not look like a PayloadGrid key." }
+  if ($ControlApplicationId -notmatch '^[0-9a-fA-F-]{36}$') { throw "ControlApplicationId must be a UUID." }
+  if ($ApiKey -eq $ControlApiKey) { throw "Noisy and control tenants must use different API keys." }
+  if ($ApplicationId -eq $ControlApplicationId) { throw "Noisy and control tenants must use different applications." }
 }
 
 function DurationSeconds([string]$Value) {
@@ -75,8 +86,10 @@ $runId = "load-$stamp-$Profile"
   profile = $Profile
   baseUrl = $BaseUrl.TrimEnd("/")
   applicationId = $ApplicationId
+  controlApplicationId = $ControlApplicationId
   endpointId = $EndpointId
   ratePerSecond = $config.Rate
+  controlRatePerSecond = if ($config.ContainsKey("ControlRate")) { $config.ControlRate } else { $null }
   duration = $config.Duration
   batchSize = $config.BatchSize
   estimatedEvents = $estimatedEvents
@@ -87,8 +100,11 @@ $runId = "load-$stamp-$Profile"
 $env:BASE_URL = $BaseUrl.TrimEnd("/")
 $env:API_KEY = $ApiKey
 $env:APPLICATION_ID = $ApplicationId
+$env:CONTROL_API_KEY = $ControlApiKey
+$env:CONTROL_APPLICATION_ID = $ControlApplicationId
 $env:ENDPOINT_ID = $EndpointId
 $env:RATE = [string]$config.Rate
+$env:CONTROL_RATE = if ($config.ContainsKey("ControlRate")) { [string]$config.ControlRate } else { "" }
 $env:DURATION = $config.Duration
 $env:BATCH_SIZE = [string]$config.BatchSize
 $env:LOAD_RUN_ID = $runId
@@ -107,8 +123,11 @@ try {
   Remove-Item Env:API_KEY -ErrorAction SilentlyContinue
   Remove-Item Env:BASE_URL -ErrorAction SilentlyContinue
   Remove-Item Env:APPLICATION_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:CONTROL_API_KEY -ErrorAction SilentlyContinue
+  Remove-Item Env:CONTROL_APPLICATION_ID -ErrorAction SilentlyContinue
   Remove-Item Env:ENDPOINT_ID -ErrorAction SilentlyContinue
   Remove-Item Env:RATE -ErrorAction SilentlyContinue
+  Remove-Item Env:CONTROL_RATE -ErrorAction SilentlyContinue
   Remove-Item Env:DURATION -ErrorAction SilentlyContinue
   Remove-Item Env:BATCH_SIZE -ErrorAction SilentlyContinue
   Remove-Item Env:LOAD_RUN_ID -ErrorAction SilentlyContinue
