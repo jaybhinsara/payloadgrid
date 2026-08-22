@@ -27,7 +27,7 @@ Documentation:
 
 1. Copy `app/.env.example` to `app/.env.local`.
 2. Set `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `PAYLOADGRID_APP_URL`, `CRON_SECRET`, and `PAYLOADGRID_ENCRYPTION_KEY`.
-3. Run the complete `app/db/schema.sql` file in the Neon SQL editor. It is idempotent and includes all current migrations.
+3. For a new empty database run `npm run db:bootstrap` with `MIGRATION_DATABASE_URL` and `MIGRATION_CONFIRM=payloadgrid`. For an existing database already matching `db/schema.sql`, run `npm run db:baseline` once. Later releases use `npm run db:migrate`.
 4. Install and start:
 
 ```powershell
@@ -61,7 +61,7 @@ Set the Vercel Root Directory to `app`. Add these Production and Preview variabl
 - `PAYLOADGRID_ADMIN_EMAILS`: comma-separated accounts allowed to access PayloadGrid Admin, publish articles, and manage platform incidents
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob token used only for operator blog cover-image uploads
 
-Run `app/db/schema.sql` in Neon before deploying code that uses the new columns.
+Run versioned database migrations before deploying code that uses new columns. `npm run db:status` reports pending versions and checks that applied migration files were not modified.
 
 ## OAuth sign-in
 

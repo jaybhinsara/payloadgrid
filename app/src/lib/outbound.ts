@@ -14,6 +14,8 @@ export type AcceptMessageInput = {
   isSimulation?: boolean;
 };
 
+export class MessageScopeError extends Error {}
+
 function readPath(value: Record<string, unknown>, path: string) {
   return path.split(".").filter(Boolean).reduce<unknown>((current, key) => current && typeof current === "object" ? (current as Record<string, unknown>)[key] : undefined, value);
 }
@@ -74,7 +76,7 @@ export async function acceptMessage(input: AcceptMessageInput) {
     where a.id = ${input.applicationId} and a.project_id = ${input.projectId}
     limit 1
   `;
-  if (!config) throw new Error("Application not found in this project");
+  if (!config) throw new MessageScopeError("Application was not found in the authenticated project");
   const transformations = Array.isArray(config.transformations) ? config.transformations : [];
   const payload = transformPayload(input.payload, transformations);
   const contract: PublishedContract | null = config.event_type_id ? {

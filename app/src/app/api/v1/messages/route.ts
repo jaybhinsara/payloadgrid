@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateApiKey } from "@/lib/api-auth";
 import { enforceApiRateLimit, enforceMonthlyMessageLimit, UsageLimitError, usageLimitHeaders } from "@/lib/limits";
-import { acceptMessage } from "@/lib/outbound";
+import { acceptMessage, MessageScopeError } from "@/lib/outbound";
 import { assertPayloadSize } from "@/lib/payload-limits";
 
 export const runtime = "nodejs";
@@ -25,6 +25,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof SyntaxError || error instanceof z.ZodError) {
       return NextResponse.json({ ok: false, error: "Message body is invalid" }, { status: 400 });
+    }
+    if (error instanceof MessageScopeError) {
+      return NextResponse.json({ ok: false, error: "Application was not found in the authenticated project" }, { status: 404, headers: { "cache-control": "no-store" } });
     }
     console.error("Message acceptance failed", error);
     return NextResponse.json({ ok: false, error: "Message acceptance is temporarily unavailable" }, {

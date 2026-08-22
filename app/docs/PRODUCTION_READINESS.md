@@ -25,12 +25,12 @@ This register separates capabilities implemented in the repository from operatio
 
 ## Required deployment configuration
 
-1. Run the complete idempotent `db/schema.sql` against production Neon.
-   For an incremental deployment, run `db/migrations/20260820_ingestion_hot_path.sql` and then `db/migrations/20260820_sharded_rate_counters.sql` before deploying code that reads the new tables.
+1. For an existing database that already matches `db/schema.sql`, run `npm run db:baseline` once with `MIGRATION_CONFIRM=payloadgrid`. For a new empty database use `npm run db:bootstrap`. Every later deployment runs `npm run db:migrate` before code that depends on new migrations.
 2. Configure QStash and protected schedules for `/api/cron/dispatch`, `/api/cron/retry-failed`, `/api/cron/maintenance`, and `/api/cron/monitor`.
 3. Keep encryption, cron, OAuth, email, and queue secrets in Vercel server-only variables.
 4. Test successful delivery, retry, dead-letter recovery, secret rotation, and stale dispatch recovery.
 5. Monitor Vercel, Neon, QStash, and email quotas independently of PayloadGrid counters.
+6. Run `npm run config:check`, `npm run test:all`, and `npm run security:audit` in the release pipeline. Run `npm run test:integration` only against an isolated database branch.
 
 ## Evidence gates before reliability claims
 
