@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authenticateApiKey } from "@/lib/api-auth";
 import { enforceApiRateLimit, enforceMonthlyMessageLimit, UsageLimitError, usageLimitHeaders } from "@/lib/limits";
 import { acceptMessage } from "@/lib/outbound";
-import { assertPayloadSize, MAX_BATCH_BODY_BYTES, MAX_BATCH_EVENTS } from "@/lib/payload-limits";
+import { assertPayloadSize, MAX_BATCH_BODY_BYTES, MAX_BATCH_EVENTS, PayloadLimitError } from "@/lib/payload-limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +50,9 @@ export async function POST(request: Request) {
       results
     }, { status: 202, headers: { "cache-control": "no-store" } });
   } catch (error) {
-    const status = error instanceof UsageLimitError ? error.status : error instanceof SyntaxError || error instanceof z.ZodError ? 400 : 500;
+    const status = error instanceof UsageLimitError || error instanceof PayloadLimitError
+      ? error.status
+      : error instanceof SyntaxError || error instanceof z.ZodError ? 400 : 500;
     const headers = error instanceof UsageLimitError ? usageLimitHeaders(error) : { "cache-control": "no-store" };
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Batch acceptance failed" }, { status, headers });
   }

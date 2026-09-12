@@ -28,8 +28,13 @@ export async function PATCH(request: Request, contextValue: { params: Promise<{ 
     const compatibility = body.compatibilityMode === "backward" ? compatibilityWarnings(current.schema as Record<string, unknown>, body.schema) : [];
     if (body.dryRun) return NextResponse.json({ ok: true, currentVersion: Number(current.version), nextVersion: Number(current.version) + 1, compatible: compatibility.length === 0, compatibilityWarnings: compatibility });
     const [version] = await sql`insert into event_contract_versions (event_type_id, version, schema, example, compatibility_mode, compatibility_warnings, status, created_by, published_at) values (${eventTypeId}, ${Number(current.version) + 1}, ${JSON.stringify(body.schema)}::jsonb, ${JSON.stringify(body.example ?? null)}::jsonb, ${body.compatibilityMode}, ${JSON.stringify(compatibility)}::jsonb, 'published', ${context.user.id}, now()) returning version, schema, example, compatibility_mode, compatibility_warnings, status, created_at`;
-    await sql`update event_types set schema = ${JSON.stringify(body.schema)}::jsonb where id = ${eventTypeId}`;
+    await sql`update event_types set schema = ${JSON.stringify(body.schema)}::jsonb where id = ${eventTypeId} and project_id = ${context.project.id}`;
     await writeAudit(context.organization.id, context.user.id, "event_contract.published", "event_type", eventTypeId, { version: version.version, compatibilityWarnings: compatibility });
     return NextResponse.json({ ok: true, version, compatible: compatibility.length === 0 }, { status: 201 });
-  } catch (error) { const result = authErrorResponse(error); return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : result.message }, { status: error instanceof z.ZodError || error instanceof ContractDefinitionError ? 400 : result.status }); }
+  } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check the event contract details." }, { status: 400 });
+    if (error instanceof ContractDefinitionError) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    const result = authErrorResponse(error);
+    return NextResponse.json({ ok: false, error: result.message }, { status: result.status });
+  }
 }

@@ -76,7 +76,7 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
         revenue_fixed_currency = case when ${body.revenueFixedCurrency !== undefined} then ${body.revenueFixedCurrency || null} else revenue_fixed_currency end,
         revenue_amount_unit = coalesce(${body.revenueAmountUnit ?? null}, revenue_amount_unit),
         updated_at = now()
-      where id = ${endpointId}
+      where id = ${endpointId} and project_id = ${context.project.id}
     `;
 
     if (body.eventTypes !== undefined) {
