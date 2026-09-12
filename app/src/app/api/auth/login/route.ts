@@ -14,8 +14,14 @@ export async function POST(request: Request) {
     await enforceAuthRateLimit(request, "login-ip", { limit: 30, windowSeconds: 900 });
     await enforceAuthRateLimit(request, "login-email", { identifier: body.email, limit: 10, windowSeconds: 900 });
     const [user] = await sql`select id, email, password_hash, email_verified_at, verification_required, suspended_at from users where email = ${body.email.toLowerCase()} limit 1`;
-    if (!user || !user.password_hash || !(await verifyPassword(body.password, String(user.password_hash)))) return NextResponse.json({ ok: false, error: "Email or password is incorrect" }, { status: 401 });
-    if (user.suspended_at) return NextResponse.json({ ok: false, error: "This account is suspended. Contact PayloadGrid support." }, { status: 403 });
+    if (!user || !user.password_hash || !(await verifyPassword(body.password, String(user.password_hash)))) {
+      if (user) await writeAccountAudit(String(user.id), "account.login_failed", { reason: "incorrect_password" });
+      return NextResponse.json({ ok: false, error: "Email or password is incorrect" }, { status: 401 });
+    }
+    if (user.suspended_at) {
+      await writeAccountAudit(String(user.id), "account.login_failed", { reason: "account_suspended" });
+      return NextResponse.json({ ok: false, error: "This account is suspended. Contact PayloadGrid support." }, { status: 403 });
+    }
     if (user.verification_required && !user.email_verified_at) {
       const [recent] = await sql`select 1 from auth_tokens where user_id = ${user.id} and kind = 'verify_email' and created_at > now() - interval '60 seconds' limit 1`;
       if (!recent) { const token = await createAuthToken(String(user.id), "verify_email", EMAIL_VERIFICATION_HOURS); await sendAuthEmail(String(user.email), "verify_email", token); }

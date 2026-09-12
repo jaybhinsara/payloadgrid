@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { requireSql } from "@/lib/db";
-import { randomToken, sha256 } from "@/lib/security";
+import { clientIp, randomToken, sha256 } from "@/lib/security";
 
 export const SESSION_COOKIE = "payloadgrid_session";
 export const ACTIVE_ORG_COOKIE = "payloadgrid_organization";
@@ -27,7 +27,7 @@ function requestMetadata(request?: Request) {
   if (!request) return { userAgent: null, ipAddress: null };
   return {
     userAgent: request.headers.get("user-agent")?.slice(0, 500) || null,
-    ipAddress: (request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null)?.slice(0, 100) || null
+    ipAddress: clientIp(request).slice(0, 100) || null
   };
 }
 
@@ -97,4 +97,8 @@ export async function getSessionContext(): Promise<SessionContext | null> {
 }
 export async function requireSession() { const context = await getSessionContext(); if (!context) throw new AuthenticationError("Please sign in to continue"); return context; }
 export function requireRole(context: SessionContext, roles: string[]) { if (!roles.includes(context.organization.role)) throw new AuthorizationError("You do not have permission for this action"); }
-export function authErrorResponse(error: unknown) { const status = error instanceof AuthenticationError || error instanceof AuthorizationError ? error.status : 500; return { status, message: error instanceof Error ? error.message : "Request failed" }; }
+export function authErrorResponse(error: unknown) {
+  if (error instanceof AuthenticationError || error instanceof AuthorizationError) return { status: error.status, message: error.message };
+  console.error("Request failed", error);
+  return { status: 500, message: "Something went wrong. Please try again." };
+}

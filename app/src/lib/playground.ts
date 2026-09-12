@@ -1,3 +1,5 @@
+import { clientIp } from "@/lib/security";
+
 export const PLAYGROUND_LIFETIME_MINUTES = 30;
 export const PLAYGROUND_MAX_REQUESTS = 20;
 export const PLAYGROUND_MAX_BODY_BYTES = 64 * 1024;
@@ -21,12 +23,7 @@ const SAFE_REQUEST_HEADERS = new Set([
   "x-webhook-event",
 ]);
 
-export function getClientIp(request: Request) {
-  return request.headers.get("cf-connecting-ip")
-    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || request.headers.get("x-real-ip")
-    || "unknown";
-}
+export const getClientIp = clientIp;
 
 export function safePlaygroundHeaders(headers: Headers) {
   return Object.fromEntries(

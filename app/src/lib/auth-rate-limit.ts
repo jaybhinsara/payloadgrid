@@ -1,5 +1,5 @@
 import { requireSql } from "@/lib/db";
-import { sha256 } from "@/lib/security";
+import { clientIp, sha256 } from "@/lib/security";
 
 export class AuthRateLimitError extends Error {
   readonly status = 429;
@@ -8,16 +8,9 @@ export class AuthRateLimitError extends Error {
   }
 }
 
-function requestIp(request: Request) {
-  return request.headers.get("cf-connecting-ip")
-    || request.headers.get("x-real-ip")
-    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || "unknown";
-}
-
 export async function enforceAuthRateLimit(request: Request, action: string, options: { identifier?: string; limit: number; windowSeconds: number }) {
   const sql = requireSql();
-  const normalized = options.identifier?.trim().toLowerCase() || requestIp(request);
+  const normalized = options.identifier?.trim().toLowerCase() || clientIp(request);
   const identifierHash = sha256(`${action}:${normalized}`);
   const [row] = await sql`
     insert into auth_rate_limit_windows (action, identifier_hash, window_start, request_count)

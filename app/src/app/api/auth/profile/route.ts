@@ -45,6 +45,7 @@ export async function PUT(request: Request) {
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check your account details." }, { status: 400 });
     const detail = authErrorResponse(error);
     return NextResponse.json({ ok: false, error: detail.message }, { status: detail.status === 500 ? 400 : detail.status });
   }

@@ -25,6 +25,19 @@ export async function verifyPassword(password: string, stored: string) {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
+export function clientIp(request: Request) {
+  return request.headers.get("cf-connecting-ip")
+    || request.headers.get("x-real-ip")
+    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || "unknown";
+}
+
+export function constantTimeEquals(a: string, b: string) {
+  const bufferA = Buffer.from(a);
+  const bufferB = Buffer.from(b);
+  return bufferA.length === bufferB.length && timingSafeEqual(bufferA, bufferB);
+}
+
 export function slugify(value: string) {
   const base = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   return base || "workspace";

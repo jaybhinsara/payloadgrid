@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     await setActiveProject(body.projectId);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Invalid request." }, { status: 400 });
     const result = authErrorResponse(error);
     return NextResponse.json({ ok: false, error: result.message }, { status: result.status === 500 ? 400 : result.status });
   }

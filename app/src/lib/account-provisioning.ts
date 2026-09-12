@@ -30,12 +30,18 @@ export async function findInvitationById(invitationId: string, email: string): P
 
 export async function acceptInvitation(userId: string, invitation: PendingInvitation) {
   const sql = requireSql();
+  // A single statement so the membership insert and invitation update either both
+  // land or neither does (Postgres always runs writable CTEs to completion even
+  // when their output isn't selected downstream).
   await sql`
-    insert into organization_members (organization_id, user_id, role)
-    values (${invitation.organizationId}, ${userId}, ${invitation.role})
-    on conflict (organization_id, user_id) do nothing
+    with membership as (
+      insert into organization_members (organization_id, user_id, role)
+      values (${invitation.organizationId}, ${userId}, ${invitation.role})
+      on conflict (organization_id, user_id) do nothing
+    )
+    update organization_invitations set accepted_at = now()
+    where id = ${invitation.id} and accepted_at is null
   `;
-  await sql`update organization_invitations set accepted_at = now() where id = ${invitation.id} and accepted_at is null`;
   return invitation.organizationId;
 }
 
@@ -45,28 +51,30 @@ export async function createDefaultWorkspace(userId: string, workspaceName: stri
   const suffix = randomToken(5).toLowerCase();
   const organizationSlug = `${slugify(cleanName)}-${suffix}`;
   const projectSlug = `${organizationSlug}-production`;
-  const [organization] = await sql`
-    insert into organizations (name, slug)
-    values (${cleanName}, ${organizationSlug})
-    returning id
+  const applicationUid = `app_${randomToken(12)}`;
+  // Chained as CTEs so the whole workspace (org, membership, project, application,
+  // default event type) is created atomically in one round trip: previously these
+  // were five separate inserts, and a failure partway through left the user with
+  // no organization/project and no way to retry (their email was already taken).
+  const [result] = await sql`
+    with org as (
+      insert into organizations (name, slug) values (${cleanName}, ${organizationSlug}) returning id
+    ), member as (
+      insert into organization_members (organization_id, user_id, role)
+      select id, ${userId}, 'owner' from org
+    ), project as (
+      insert into projects (organization_id, name, slug, environment)
+      select id, 'Production', ${projectSlug}, 'production' from org
+      returning id
+    ), application as (
+      insert into applications (project_id, name, uid, description)
+      select id, 'My application', ${applicationUid}, 'Your first PayloadGrid application' from project
+    ), event_type as (
+      insert into event_types (project_id, name, description)
+      select id, 'order.created', 'Example event type; rename or add your own' from project
+      on conflict do nothing
+    )
+    select (select id from org) as organization_id, (select id from project) as project_id
   `;
-  await sql`
-    insert into organization_members (organization_id, user_id, role)
-    values (${organization.id}, ${userId}, 'owner')
-  `;
-  const [project] = await sql`
-    insert into projects (organization_id, name, slug, environment)
-    values (${organization.id}, 'Production', ${projectSlug}, 'production')
-    returning id
-  `;
-  await sql`
-    insert into applications (project_id, name, uid, description)
-    values (${project.id}, 'My application', ${`app_${randomToken(12)}`}, 'Your first PayloadGrid application')
-  `;
-  await sql`
-    insert into event_types (project_id, name, description)
-    values (${project.id}, 'order.created', 'Example event type; rename or add your own')
-    on conflict do nothing
-  `;
-  return { organizationId: String(organization.id), projectId: String(project.id) };
+  return { organizationId: String(result.organization_id), projectId: String(result.project_id) };
 }

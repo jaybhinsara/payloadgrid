@@ -197,7 +197,17 @@ async function establishAccount(provider: OAuthProvider, profile: ProviderProfil
         returning id, name, email, profile_completed_at
       `;
     } else {
-      await sql`update users set email_verified_at = coalesce(email_verified_at, now()), updated_at = now() where id = ${user.id}`;
+      // If this OAuth login is the account's first verification, any existing
+      // password was never proven to belong to the real owner (someone could have
+      // pre-registered this email with a password of their choosing). Clear it so
+      // that pre-set password no longer works, instead of silently activating it.
+      await sql`
+        update users
+        set password_hash = case when email_verified_at is null then null else password_hash end,
+          email_verified_at = coalesce(email_verified_at, now()),
+          updated_at = now()
+        where id = ${user.id}
+      `;
     }
     const linkedRows = await sql`
       insert into oauth_accounts (user_id, provider, provider_user_id, email_at_linking)

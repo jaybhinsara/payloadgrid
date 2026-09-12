@@ -26,22 +26,58 @@ export async function POST(request: Request) {
     if (existing) return NextResponse.json({ ok: false, error: "An account with this email already exists. Sign in before joining the invited workspace." }, { status: 409 });
     const passwordHash = await hashPassword(body.password); const requiresVerification = emailDeliveryConfigured();
     let user: Record<string, unknown>;
+    // Each branch below is a single statement chaining CTEs, so the user row and
+    // its workspace/membership are created atomically in one round trip: previously
+    // these were separate sequential inserts, and a failure partway through (e.g. a
+    // transient DB error after the users insert) left the account stranded with no
+    // organization/project and no way to retry, since the email is already taken.
     if (body.inviteToken) {
       const [invitation] = await sql`select id, organization_id, email, role from organization_invitations where token_hash = ${sha256(body.inviteToken)} and accepted_at is null and expires_at > now() limit 1`;
       if (!invitation || String(invitation.email).toLowerCase() !== email) return NextResponse.json({ ok: false, error: "This invitation is invalid, expired, or belongs to another email." }, { status: 400 });
-      [user] = await sql`insert into users (name, email, password_hash, email_verified_at, verification_required, account_type, profile_completed_at, terms_accepted_at, privacy_accepted_at) values (${body.name}, ${email}, ${passwordHash}, ${requiresVerification ? null : new Date().toISOString()}, ${requiresVerification}, ${body.accountType}, now(), now(), now()) returning id, name, email`;
-      await sql`insert into organization_members (organization_id, user_id, role) values (${invitation.organization_id}, ${user.id}, ${invitation.role})`;
-      await sql`update organization_invitations set accepted_at = now() where id = ${invitation.id}`;
+      [user] = await sql`
+        with new_user as (
+          insert into users (name, email, password_hash, email_verified_at, verification_required, account_type, profile_completed_at, terms_accepted_at, privacy_accepted_at)
+          values (${body.name}, ${email}, ${passwordHash}, ${requiresVerification ? null : new Date().toISOString()}, ${requiresVerification}, ${body.accountType}, now(), now(), now())
+          returning id, name, email
+        ), member as (
+          insert into organization_members (organization_id, user_id, role)
+          select ${invitation.organization_id}, id, ${invitation.role} from new_user
+        ), invite as (
+          update organization_invitations set accepted_at = now() where id = ${invitation.id}
+        )
+        select id, name, email from new_user
+      `;
     } else {
       if (!body.organizationName) return NextResponse.json({ ok: false, error: "Workspace name is required" }, { status: 400 });
       if (body.accountType === "company" && !body.legalName) return NextResponse.json({ ok: false, error: "Registered company name is required" }, { status: 400 });
       const suffix = randomToken(5).toLowerCase(); const organizationSlug = `${slugify(body.organizationName)}-${suffix}`; const projectSlug = `${organizationSlug}-production`;
-      [user] = await sql`insert into users (name, email, password_hash, email_verified_at, verification_required, account_type, profile_completed_at, terms_accepted_at, privacy_accepted_at) values (${body.name}, ${email}, ${passwordHash}, ${requiresVerification ? null : new Date().toISOString()}, ${requiresVerification}, ${body.accountType}, now(), now(), now()) returning id, name, email`;
-      const [organization] = await sql`insert into organizations (name, slug, customer_type, legal_name, website, country_code) values (${body.organizationName}, ${organizationSlug}, ${body.accountType}, ${body.legalName || null}, ${body.website || null}, ${body.countryCode}) returning id`;
-      await sql`insert into organization_members (organization_id, user_id, role) values (${organization.id}, ${user.id}, 'owner')`;
-      const [project] = await sql`insert into projects (organization_id, name, slug, environment) values (${organization.id}, 'Production', ${projectSlug}, 'production') returning id`;
-      await sql`insert into applications (project_id, name, uid, description) values (${project.id}, 'My application', ${`app_${randomToken(12)}`}, 'Your first PayloadGrid application')`;
-      await sql`insert into event_types (project_id, name, description) values (${project.id}, 'order.created', 'Example event type; rename or add your own') on conflict do nothing`;
+      const applicationUid = `app_${randomToken(12)}`;
+      [user] = await sql`
+        with new_user as (
+          insert into users (name, email, password_hash, email_verified_at, verification_required, account_type, profile_completed_at, terms_accepted_at, privacy_accepted_at)
+          values (${body.name}, ${email}, ${passwordHash}, ${requiresVerification ? null : new Date().toISOString()}, ${requiresVerification}, ${body.accountType}, now(), now(), now())
+          returning id, name, email
+        ), org as (
+          insert into organizations (name, slug, customer_type, legal_name, website, country_code)
+          values (${body.organizationName}, ${organizationSlug}, ${body.accountType}, ${body.legalName || null}, ${body.website || null}, ${body.countryCode})
+          returning id
+        ), member as (
+          insert into organization_members (organization_id, user_id, role)
+          select org.id, new_user.id, 'owner' from org, new_user
+        ), project as (
+          insert into projects (organization_id, name, slug, environment)
+          select id, 'Production', ${projectSlug}, 'production' from org
+          returning id
+        ), application as (
+          insert into applications (project_id, name, uid, description)
+          select id, 'My application', ${applicationUid}, 'Your first PayloadGrid application' from project
+        ), event_type as (
+          insert into event_types (project_id, name, description)
+          select id, 'order.created', 'Example event type; rename or add your own' from project
+          on conflict do nothing
+        )
+        select id, name, email from new_user
+      `;
     }
     if (requiresVerification) {
       const token = await createAuthToken(String(user.id), "verify_email", EMAIL_VERIFICATION_HOURS);
@@ -53,8 +89,8 @@ export async function POST(request: Request) {
   } catch (error) {
     const limited = authRateLimitResponse(error);
     if (limited) return NextResponse.json(limited.body, { status: limited.status, headers: limited.headers });
-    const message = error instanceof Error ? error.message : "Sign up failed";
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check your account details." }, { status: 400 });
+    if ((error as { code?: string })?.code === "23505") return NextResponse.json({ ok: false, error: "An account with this email already exists. Sign in before joining the invited workspace." }, { status: 409 });
     console.error("Sign up failed", error);
     return NextResponse.json({ ok: false, error: "Could not create the account. Please try again." }, { status: 500 });
   }
