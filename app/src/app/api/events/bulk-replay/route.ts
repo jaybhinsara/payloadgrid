@@ -54,7 +54,11 @@ export async function POST(request: Request) {
     after(() => dispatchOutboxBatch(Math.min(targets.length, 100)));
     await writeAudit(context.organization.id, context.user.id, "event.bulk_replay_accepted", "replay_batch", String(batch.id), { accepted: targets.length, rateLimitPerMinute: body.rateLimitPerMinute });
     return NextResponse.json({ ok: true, batchId: batch.id, accepted: targets.length, deduplicated: (body.eventIds?.length || targets.length) - targets.length, rateLimitPerMinute: body.rateLimitPerMinute }, { status: 202 });
-  } catch (error) { const result = authErrorResponse(error); return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : result.message }, { status: error instanceof z.ZodError ? 400 : result.status }); }
+  } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check your replay request." }, { status: 400 });
+    const result = authErrorResponse(error);
+    return NextResponse.json({ ok: false, error: result.message }, { status: result.status });
+  }
 }
 
 export async function GET(request: Request) {

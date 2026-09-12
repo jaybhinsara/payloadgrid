@@ -66,7 +66,8 @@ export async function POST(request: Request) {
     await writeAudit(context.organization.id, context.user.id, "event.bulk_cancelled", "event", undefined, { count: cancelled.length, filters: body.filters || null });
     return NextResponse.json({ ok: true, cancelled: cancelled.length, limitReached: cancelled.length === body.maxEvents });
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check your cancellation request." }, { status: 400 });
     const result = authErrorResponse(error);
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : result.message }, { status: error instanceof z.ZodError ? 400 : result.status });
+    return NextResponse.json({ ok: false, error: result.message }, { status: result.status });
   }
 }

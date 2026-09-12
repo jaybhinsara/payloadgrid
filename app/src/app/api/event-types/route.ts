@@ -46,7 +46,9 @@ export async function POST(request: Request) {
     await writeAudit(context.organization.id, context.user.id, "event_contract.published", "event_type", String(record.id), { version: version.version, applicationId: body.applicationId || null, compatibilityWarnings: compatibility });
     return NextResponse.json({ ok: true, record: { ...record, currentVersion: version } }, { status: 201 });
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.issues[0]?.message || "Check your event type details." }, { status: 400 });
+    if (error instanceof ContractDefinitionError) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     const result = authErrorResponse(error);
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : result.message }, { status: error instanceof z.ZodError || error instanceof ContractDefinitionError ? 400 : result.status });
+    return NextResponse.json({ ok: false, error: result.message }, { status: result.status });
   }
 }
