@@ -1,4 +1,5 @@
 import Razorpay from "razorpay";
+import { authErrorResponse } from "@/lib/auth";
 
 export class RazorpayConfigurationError extends Error {}
 
@@ -45,5 +46,30 @@ export function razorpayErrorDetails(error: unknown) {
     step: candidate?.error?.step || null,
     reason: candidate?.error?.reason || null,
     field: candidate?.error?.field || null
+  };
+}
+
+/**
+ * Shared tail for Razorpay route catch blocks, once the route has already
+ * handled its own request-validation (ZodError) case. Covers configuration
+ * errors, session/role errors, and generic Razorpay API failures.
+ */
+export function razorpayFailureResponse(error: unknown, action: { logContext: string; failureMessage: string; failureCode: string }) {
+  if (error instanceof RazorpayConfigurationError) {
+    return { body: { ok: false, error: error.message, code: "RAZORPAY_CONFIG_INVALID" }, status: 500 };
+  }
+  const auth = authErrorResponse(error);
+  if (auth.status !== 500) {
+    return { body: { ok: false, error: auth.message, code: auth.status === 401 ? "AUTH_REQUIRED" : "AUTH_FORBIDDEN" }, status: auth.status };
+  }
+  console.error(action.logContext, razorpayErrorDetails(error));
+  const status = razorpayErrorStatus(error);
+  return {
+    body: {
+      ok: false,
+      error: status === 401 ? "Razorpay authentication failed. Check the server key ID and secret." : action.failureMessage,
+      code: status === 401 ? "RAZORPAY_AUTH_FAILED" : action.failureCode
+    },
+    status
   };
 }

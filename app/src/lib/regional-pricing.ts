@@ -12,7 +12,10 @@ const countryCurrencies: Record<string, PricingCurrency> = {
 };
 
 export function detectedCountry(headers: Headers) {
-  const value = headers.get("x-vercel-ip-country") || headers.get("cf-ipcountry") || headers.get("x-country-code") || "";
+  // Only trust country signals set by the hosting edge (Vercel/Cloudflare) from
+  // the connection's real IP — never a client-suppliable header, which would let
+  // a request claim a cheaper region's price.
+  const value = headers.get("x-vercel-ip-country") || headers.get("cf-ipcountry") || "";
   return value.trim().toUpperCase().slice(0, 2);
 }
 

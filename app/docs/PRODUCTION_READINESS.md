@@ -22,11 +22,12 @@ This register separates capabilities implemented in the repository from operatio
 - Guarded sustained, burst, failure, and recovery profiles with run-specific delivery evidence.
 - Read-only backup baseline and restore verification tooling with an isolated recovery runbook.
 - Company and individual account profiles, terms/privacy acceptance timestamps, 24-hour email verification, 10-minute OAuth state, one-hour password reset, and bounded session expiry.
+- Signature-verified Razorpay webhook reconciliation (`payment.captured`, `refund.created`/`refund.processed`, `payment.dispute.created`) so plan activation and refund/dispute ledger status do not depend solely on the customer's browser completing the post-checkout call.
 
 ## Required deployment configuration
 
 1. For an existing database that already matches `db/schema.sql`, run `npm run db:baseline` once with `MIGRATION_CONFIRM=payloadgrid`. For a new empty database use `npm run db:bootstrap`. Every later deployment runs `npm run db:migrate` before code that depends on new migrations.
-2. Configure QStash and protected schedules for `/api/cron/dispatch`, `/api/cron/retry-failed`, `/api/cron/maintenance`, and `/api/cron/monitor`.
+2. Configure QStash and protected schedules for `/api/cron/dispatch`, `/api/cron/retry-failed`, `/api/cron/maintenance`, and `/api/cron/monitor`. Register `/api/webhooks/razorpay` in the Razorpay dashboard for the `payment.captured`, `refund.created`, `refund.processed`, and `payment.dispute.created` events, and set `RAZORPAY_WEBHOOK_SECRET` to the secret shown there.
 3. Keep encryption, cron, OAuth, email, and queue secrets in Vercel server-only variables.
 4. Test successful delivery, retry, dead-letter recovery, secret rotation, and stale dispatch recovery.
 5. Monitor Vercel, Neon, QStash, and email quotas independently of PayloadGrid counters.

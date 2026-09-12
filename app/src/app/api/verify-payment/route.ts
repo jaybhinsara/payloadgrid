@@ -1,13 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
+import { requireRole, requireSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { requireSql } from "@/lib/db";
 import { getPlan, planMonthlyPrice, type PlanId } from "@/lib/plans";
 import { paymentsEnabled } from "@/lib/payments";
 import { isPricingCurrency, priceInCurrencySubunits } from "@/lib/regional-pricing";
-import { getRazorpayClient, getRazorpayConfig, RazorpayConfigurationError, razorpayErrorDetails, razorpayErrorStatus } from "@/lib/razorpay";
+import { getRazorpayClient, getRazorpayConfig, razorpayFailureResponse } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
 const requestSchema = z.object({
@@ -122,13 +122,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, verified: true, activated: Boolean(activation?.activated), plan: planId });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: "Payment verification fields are missing or invalid" }, { status: 400 });
-    if (error instanceof RazorpayConfigurationError) {
-      return NextResponse.json({ ok: false, error: error.message, code: "RAZORPAY_CONFIG_INVALID" }, { status: 500 });
-    }
-    const auth = authErrorResponse(error);
-    if (auth.status !== 500) return NextResponse.json({ ok: false, error: auth.message, code: auth.status === 401 ? "AUTH_REQUIRED" : "AUTH_FORBIDDEN" }, { status: auth.status });
-    console.error("Razorpay payment verification failed", razorpayErrorDetails(error));
-    const status = razorpayErrorStatus(error);
-    return NextResponse.json({ ok: false, error: status === 401 ? "Razorpay authentication failed. Check the server key ID and secret." : "Unable to verify the payment", code: status === 401 ? "RAZORPAY_AUTH_FAILED" : "RAZORPAY_VERIFY_FAILED" }, { status });
+    const failure = razorpayFailureResponse(error, {
+      logContext: "Razorpay payment verification failed",
+      failureMessage: "Unable to verify the payment",
+      failureCode: "RAZORPAY_VERIFY_FAILED"
+    });
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 }

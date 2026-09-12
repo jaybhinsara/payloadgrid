@@ -77,6 +77,25 @@ export async function PATCH(request: Request, contextValue: RouteContext) {
     const nextPlan = body.plan ?? String(current.plan);
     const nextName = body.name ?? String(current.name);
     const [workspace] = await sql`update organizations set plan=${nextPlan}, name=${nextName}, updated_at=now() where id=${workspaceId} returning id, name, slug, plan, updated_at`;
+    if (body.plan !== undefined) {
+      // Record the grant in the billing ledger as a 'manual' subscription (no end
+      // date) so the maintenance cron's plan-expiry sweep -- which only reverts
+      // 'razorpay' subscriptions -- can never silently downgrade an admin override,
+      // and so admin-granted plans are auditable the same way paid ones are.
+      // billing_subscriptions.plan only allows starter/growth/enterprise, so a
+      // downgrade to free instead cancels any manual grant on record.
+      if (nextPlan === "free") {
+        await sql`update billing_subscriptions set status = 'cancelled', cancel_at_period_end = true, updated_at = now() where organization_id = ${workspaceId} and provider = 'manual'`;
+      } else {
+        await sql`
+          insert into billing_subscriptions (organization_id, provider, plan, status, current_period_start, current_period_end, cancel_at_period_end)
+          values (${workspaceId}, 'manual', ${nextPlan}, 'active', now(), null, false)
+          on conflict (organization_id) do update set
+            provider = 'manual', plan = excluded.plan, status = 'active',
+            current_period_start = now(), current_period_end = null, cancel_at_period_end = false, updated_at = now()
+        `;
+      }
+    }
     await writePlatformAudit(context.user.id, "workspace.updated", "organization", workspaceId, {
       previousName: current.name, name: nextName, previousPlan: current.plan, plan: nextPlan
     });

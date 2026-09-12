@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authErrorResponse, requireRole, requireSession } from "@/lib/auth";
+import { requireRole, requireSession } from "@/lib/auth";
 import { getPlan, planMonthlyPrice } from "@/lib/plans";
 import { paymentsEnabled } from "@/lib/payments";
 import { configuredCheckoutCurrency, priceInCurrencySubunits } from "@/lib/regional-pricing";
-import { getRazorpayClient, RazorpayConfigurationError, razorpayErrorDetails, razorpayErrorStatus } from "@/lib/razorpay";
+import { getRazorpayClient, razorpayFailureResponse } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
 const requestSchema = z.object({ plan: z.enum(["starter", "growth"]) });
@@ -46,13 +46,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, order_id: order.id, amount: Number(order.amount), currency: order.currency });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: "Choose a supported paid plan" }, { status: 400 });
-    if (error instanceof RazorpayConfigurationError) {
-      return NextResponse.json({ ok: false, error: error.message, code: "RAZORPAY_CONFIG_INVALID" }, { status: 500 });
-    }
-    const auth = authErrorResponse(error);
-    if (auth.status !== 500) return NextResponse.json({ ok: false, error: auth.message, code: auth.status === 401 ? "AUTH_REQUIRED" : "AUTH_FORBIDDEN" }, { status: auth.status });
-    console.error("Razorpay order creation failed", razorpayErrorDetails(error));
-    const status = razorpayErrorStatus(error);
-    return NextResponse.json({ ok: false, error: status === 401 ? "Razorpay authentication failed. Check the server key ID and secret." : "Unable to create the Razorpay order", code: status === 401 ? "RAZORPAY_AUTH_FAILED" : "RAZORPAY_ORDER_FAILED" }, { status });
+    const failure = razorpayFailureResponse(error, {
+      logContext: "Razorpay order creation failed",
+      failureMessage: "Unable to create the Razorpay order",
+      failureCode: "RAZORPAY_ORDER_FAILED"
+    });
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 }
