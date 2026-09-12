@@ -4,13 +4,18 @@ PayloadGrid may be offered to pilot customers only when every applicable gate be
 
 ## Automated repository gates
 
+Enforced on every pull request and push to `main` by `.github/workflows/application-ci.yml` (see that file for the exact steps):
+
 - `npm ci` succeeds from the committed lockfile.
 - `npm run security:audit` reports no vulnerability at or above the configured threshold.
 - `npm run typecheck`, `npm test`, and `npm run test:smoke` pass.
-- The production environment passes `npm run config:check` without printing secret values.
-- `npm run db:status` reports no pending or modified migration.
-- The isolated database branch passes `npm run test:integration` with `PAYLOADGRID_TEST_DATABASE_CONFIRM=isolated`.
 - GitHub branch protection requires the Application CI workflow before merging to `main`.
+
+Not run by that shared workflow, because each needs deployment-specific secrets (a live database, an isolated Neon branch, or the production environment's own secret values) that a generic PR pipeline should not hold. Run these manually, or from a separate pipeline scoped to the target environment, before each deployment:
+
+- The target environment passes `npm run config:check` without printing secret values.
+- `npm run db:status` reports no pending or modified migration, run against that environment's database.
+- The isolated database branch passes `npm run test:integration` with `PAYLOADGRID_TEST_DATABASE_CONFIRM=isolated`.
 
 ## Deployment gates
 

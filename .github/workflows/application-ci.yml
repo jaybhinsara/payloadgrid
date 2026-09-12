@@ -33,8 +33,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run security:audit
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
-      - run: node ops/http-smoke.mjs
+      - run: npm run test:smoke
