@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { dispatchOutboxBatch, recoverMissingDispatchJobs } from "@/lib/dispatch-outbox";
+import { constantTimeEquals } from "@/lib/security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET;
-  return Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`;
+  return Boolean(secret) && constantTimeEquals(request.headers.get("authorization") || "", `Bearer ${secret}`);
 }
 
 async function run(request: Request) {

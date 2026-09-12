@@ -144,6 +144,10 @@ export async function dispatchOutboxBatch(limit = 25, eventId?: string): Promise
 
 export async function recoverMissingDispatchJobs(limit = 100) {
   const sql = requireSql();
+  // Events whose worker crashed or timed out mid-delivery can be left wedged in
+  // 'processing' indefinitely. This runs from both the dispatch and retry-failed
+  // cron schedules so recovery does not depend on either one alone staying enabled.
+  await sql`update webhook_events set status = 'queued', locked_at = null where status = 'processing' and locked_at < now() - interval '5 minutes'`;
   const stale = await sql`
     update dispatch_jobs j set status = 'pending', available_at = now(),
       qstash_message_id = null, last_error = 'Published job exceeded its delivery acknowledgement window',
